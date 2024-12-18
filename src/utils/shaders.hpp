@@ -23,9 +23,11 @@ namespace Shaders {
         
         in vec2 TexCoord;
         uniform sampler2D canvasTexture;
+        uniform float layerOpacity;
         
         void main() {
-            FragColor = texture(canvasTexture, TexCoord);
+            vec4 texColor = texture(canvasTexture, TexCoord);
+            FragColor = vec4(texColor.rgb, texColor.a * layerOpacity);
         }
     )";
 

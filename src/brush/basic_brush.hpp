@@ -4,7 +4,7 @@
 
 class BasicBrush {
 public:
-    BasicBrush() : size(20.0f), color(1.0f, 0.0f, 0.0f, 1.0f) {}
+    BasicBrush() : size(20.0f), color(0.0f, 0.0f, 0.0f, 1.0f) {}
     
     void setSize(float s) { size = s; }
     void setColor(const Color& c) { color = c; }

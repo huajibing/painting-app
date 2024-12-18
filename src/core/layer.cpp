@@ -104,10 +104,8 @@ void Layer::drawPoint(float x, float y, float size, const Color& color) {
     glUniform1f(glGetUniformLocation(brushShader->getProgram(), "size"), normalizedSize);
     
     // Adjust color alpha by layer opacity
-    Color adjustedColor = color;
-    adjustedColor.a *= opacity;
     glUniform4f(glGetUniformLocation(brushShader->getProgram(), "brushColor"),
-                adjustedColor.r, adjustedColor.g, adjustedColor.b, adjustedColor.a);
+                color.r, color.g, color.b, color.a);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glUniform1i(glGetUniformLocation(brushShader->getProgram(), "layerTexture"), 0);

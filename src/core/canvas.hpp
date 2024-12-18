@@ -29,6 +29,7 @@ public:
     size_t getLayerCount() const { return layers.size(); }
     Layer* getLayer(size_t index);
     const Layer* getLayer(size_t index) const;
+    std::vector<std::unique_ptr<Layer>>& getLayers() { return layers; }
     
     // Dimension getters
     int getWidth() const { return textureWidth; }

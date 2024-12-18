@@ -5,8 +5,8 @@
 #include <iostream>
 
 UIManager::UIManager() 
-    : window(nullptr), brushSystem(nullptr), 
-      brushSize(20.0f), brushOpacity(1.0f) {
+    : window(nullptr), brushSystem(nullptr),
+    canvas(nullptr), brushSize(20.0f), brushOpacity(1.0f) {
     brushColor[0] = 1.0f;
     brushColor[1] = 0.0f;
     brushColor[2] = 0.0f;
@@ -28,7 +28,7 @@ bool UIManager::init() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     
-    window = glfwCreateWindow(1280, 720, "Painting App", nullptr, nullptr);
+    window = glfwCreateWindow(1600, 1200, "Painting App", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         return false;
@@ -46,6 +46,14 @@ bool UIManager::init() {
     ImGui_ImplOpenGL3_Init("#version 330");
     
     setupStyle();
+
+    // std::cout << "Creating layer panel..." << std::endl;
+    // if (canvas) {
+    //     layerPanel = std::make_unique<LayerPanel>(*canvas);
+    //     std::cout << "Layer panel created successfully" << std::endl;
+    // } else {
+    //     std::cout << "No canvas available for layer panel" << std::endl;
+    // }
     return true;
 }
 
@@ -54,26 +62,26 @@ void UIManager::render() {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
     
-    // Add ImGui windows here
-    ImGui::Begin("Tools");
-    ImGui::Text("Tool Panel");
+    // // Add ImGui windows here
+    // ImGui::Begin("Tools");
+    // ImGui::Text("Tool Panel");
     
-    bool settingsChanged = false;
+    // bool settingsChanged = false;
     
-    // Brush color picker
-    if (ImGui::ColorEdit3("Brush Color", brushColor)) {
-        settingsChanged = true;
-    }
+    // // Brush color picker
+    // if (ImGui::ColorEdit3("Brush Color", brushColor)) {
+    //     settingsChanged = true;
+    // }
     
-    // Brush size slider
-    if (ImGui::SliderFloat("Brush Size", &brushSize, 1.0f, 50.0f)) {
-        settingsChanged = true;
-    }
+    // // Brush size slider
+    // if (ImGui::SliderFloat("Brush Size", &brushSize, 1.0f, 50.0f)) {
+    //     settingsChanged = true;
+    // }
     
-    // Brush opacity slider
-    if (ImGui::SliderFloat("Opacity", &brushOpacity, 0.0f, 1.0f)) {
-        settingsChanged = true;
-    }
+    // // Brush opacity slider
+    // if (ImGui::SliderFloat("Opacity", &brushOpacity, 0.0f, 1.0f)) {
+    //     settingsChanged = true;
+    // }
 
     // // Debug information
     // ImGui::Text("Debug Info:");
@@ -81,13 +89,20 @@ void UIManager::render() {
     // ImGui::Text("Brush Color: R=%.4f G=%.4f B=%.4f", 
     //             brushColor[0], brushColor[1], brushColor[2]);
     
-    // Update brush settings if they changed and brush system exists
-    if (settingsChanged && brushSystem) {
-        Color color(brushColor[0], brushColor[1], brushColor[2], brushOpacity);
-        brushSystem->updateBrushSettings(brushSize, color);
-    }
+    // // Update brush settings if they changed and brush system exists
+    // if (settingsChanged && brushSystem) {
+    //     Color color(brushColor[0], brushColor[1], brushColor[2], brushOpacity);
+    //     brushSystem->updateBrushSettings(brushSize, color);
+    // }
     
     ImGui::End();
+
+    if (layerPanel) {
+        layerPanel->render();
+    }
+    if (toolbar) {
+        toolbar->render();
+    }
     
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

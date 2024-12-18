@@ -98,12 +98,16 @@ void Canvas::render() {
     
     // Setup blending for layer compositing
     glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
                         GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     
     // Render each visible layer from bottom to top
     for (const auto& layer : layers) {
         if (layer->getVisibility()) {
+            glUniform1f(glGetUniformLocation(shader->getProgram(), "layerOpacity"), 
+                       layer->getOpacity());
+
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, layer->getTexture());
             

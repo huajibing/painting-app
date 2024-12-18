@@ -41,6 +41,9 @@ bool Application::init() {
         return false;
     }
 
+    // Set canvas for UI manager
+    uiManager->setCanvas(canvas.get());
+
     // Set window resize callback
     GLFWwindow* window = uiManager->getWindow();
     glfwSetWindowUserPointer(window, this);
@@ -58,10 +61,8 @@ bool Application::init() {
     // Connect brush system to UI manager
     uiManager->setBrushSystem(brushSystem.get());
 
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Failed to initialize GLAD" << std::endl;
-        return false;
-    }
+    uiManager->initToolbar();
+
     std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
     std::cout << "OpenGL Vendor: " << glGetString(GL_VENDOR) << std::endl;
     std::cout << "OpenGL Renderer: " << glGetString(GL_RENDERER) << std::endl;
@@ -109,9 +110,8 @@ void Application::handleEvents() {
 
     // Check if left mouse button is pressed
     if (isPressed) {
-        // 如果这是新的按下（之前未按下）
         if (!wasPressed) {
-            brushSystem->resetDrawState();  // 重置绘制状态
+            brushSystem->resetDrawState();
         }
 
         double xpos, ypos;
