@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include "../utils/color.hpp"
 #include "../utils/shader.hpp"
+#include "layer.hpp"
 
 class Canvas {
 public:
@@ -16,42 +17,55 @@ public:
     void resize(int windowWidth, int windowHeight);
     void clear();
     
+    // Drawing operations (redirected to active layer)
     void drawPoint(float x, float y, float size, const Color& color);
     void drawLine(float x1, float y1, float x2, float y2, float size, const Color& color);
     
+    // Layer management
+    void addLayer(const std::string& name = "New Layer");
+    void removeLayer(size_t index);
+    void setActiveLayer(size_t index);
+    size_t getActiveLayerIndex() const { return activeLayerIndex; }
+    size_t getLayerCount() const { return layers.size(); }
+    Layer* getLayer(size_t index);
+    const Layer* getLayer(size_t index) const;
+    
+    // Dimension getters
     int getWidth() const { return textureWidth; }
     int getHeight() const { return textureHeight; }
     
-    // Get canvas rectangle in window coordinates
+    // Canvas rectangle and coordinate conversion
     void getCanvasRect(int& x, int& y, int& w, int& h) const;
-    
-    // Convert window coordinates to canvas coordinates
     bool windowToCanvas(double windowX, double windowY, float& canvasX, float& canvasY) const;
     
 private:
     void setupQuad();
-    void setupBrushBuffers();
     void updateProjection();
     void saveViewport();
     void restoreViewport();
     
+    // Canvas dimensions
     int textureWidth;
     int textureHeight;
     int displayWidth;
     int displayHeight;
     int windowWidth;
     int windowHeight;
-    GLint savedViewport[4];  // Saved viewport dimensions
+    GLint savedViewport[4];
     
+    // Canvas properties
     Color backgroundColor;
-    glm::mat4 projection;    // Orthographic projection matrix
-    float canvasScale;       // Scale factor for canvas display
+    glm::mat4 projection;
+    float canvasScale;
     
-    unsigned int frameBuffer;  // OpenGL framebuffer object
-    unsigned int texture;      // OpenGL texture object
-    unsigned int VAO, VBO, EBO;  // Canvas quad rendering objects
-    unsigned int brushVAO, brushVBO;  // Brush rendering objects
+    // Rendering objects
+    unsigned int VAO, VBO, EBO;
     
-    std::unique_ptr<Shader> shader;      // Canvas rendering shader
-    std::unique_ptr<Shader> brushShader; // Brush rendering shader
+    // Layers
+    std::vector<std::unique_ptr<Layer>> layers;
+    size_t activeLayerIndex;
+    
+    // Shaders
+    std::unique_ptr<Shader> shader;          // Main canvas shader
+    std::unique_ptr<Shader> compositeShader; // Layer compositing shader
 };

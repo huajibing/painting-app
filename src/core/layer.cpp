@@ -51,7 +51,7 @@ bool Layer::init() {
 void Layer::clear() {
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
     glViewport(0, 0, width, height);
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);  // Clear to transparent
+    glClearColor(1.0f, 1.0f, 1.0f, 0.0f);  // Clear to transparent
     glClear(GL_COLOR_BUFFER_BIT);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -112,9 +112,9 @@ void Layer::drawPoint(float x, float y, float size, const Color& color) {
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
                         GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    
+        
     glBindVertexArray(brushVAO);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 34);  // 32 segments + center + repeat first
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 34);
     
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
