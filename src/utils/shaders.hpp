@@ -37,7 +37,7 @@ namespace Shaders {
         uniform float size;
         uniform float aspectRatio;
         
-        out vec2 FragPos;
+        out vec2 TexCoord;
         
         void main() {
             vec2 offset = aPos * size;
@@ -47,24 +47,26 @@ namespace Shaders {
             
             gl_Position = vec4(finalPosition, 0.0, 1.0);
             
-            FragPos = aPos;
+            TexCoord = (finalPosition + 1.0) * 0.5;
         }
     )";
+
     const std::string brushFragmentShader = R"(
         #version 330 core
         out vec4 FragColor;
         
+        in vec2 TexCoord;
+        uniform sampler2D layerTexture;
         uniform vec4 brushColor;
         
-        in vec2 FragPos;
-
         void main() {
-            float dist = length(FragPos);
-
-            // Opacity mapping
-            float finalAlpha = pow(brushColor.a, 3.0) * 0.5;
+            vec4 layerColor = texture(layerTexture, TexCoord);
+            float mappedAlpha = pow(brushColor.a, 3) * 0.5;
             
-            FragColor = vec4(brushColor.rgb, finalAlpha);
+            vec3 finalRGB = brushColor.rgb * mappedAlpha + layerColor.rgb * layerColor.a * (1.0 - mappedAlpha);
+            float finalAlpha = mappedAlpha + layerColor.a * (1.0 - mappedAlpha);
+            
+            FragColor = vec4(finalRGB / max(finalAlpha, 0.01), finalAlpha);
         }
     )";
 }

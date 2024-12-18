@@ -51,7 +51,7 @@ bool Layer::init() {
 void Layer::clear() {
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
     glViewport(0, 0, width, height);
-    glClearColor(1.0f, 1.0f, 1.0f, 0.0f);  // Clear to transparent
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -108,10 +108,11 @@ void Layer::drawPoint(float x, float y, float size, const Color& color) {
     adjustedColor.a *= opacity;
     glUniform4f(glGetUniformLocation(brushShader->getProgram(), "brushColor"),
                 adjustedColor.r, adjustedColor.g, adjustedColor.b, adjustedColor.a);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(glGetUniformLocation(brushShader->getProgram(), "layerTexture"), 0);
     
-    glEnable(GL_BLEND);
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
-                        GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_BLEND);
         
     glBindVertexArray(brushVAO);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 34);
