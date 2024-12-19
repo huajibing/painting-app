@@ -15,6 +15,8 @@ Layer::~Layer() {
     glDeleteTextures(1, &texture);
     glDeleteVertexArrays(1, &brushVAO);
     glDeleteBuffers(1, &brushVBO);
+    glDeleteVertexArrays(1, &mergeVAO);
+    glDeleteBuffers(1, &mergeVBO);
 }
 
 bool Layer::init() {
@@ -45,6 +47,35 @@ bool Layer::init() {
     clear();
     
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    
+    // Initialize merge shader
+    mergeShader = std::make_shared<Shader>(Shaders::mergeVertexShader, 
+                                         Shaders::mergeFragmentShader);
+    
+    // Setup quad for merging
+    float quadVertices[] = {
+        // positions        // texture coords
+        -1.0f,  1.0f,     0.0f, 1.0f,
+        -1.0f, -1.0f,     0.0f, 0.0f,
+         1.0f,  1.0f,     1.0f, 1.0f,
+         1.0f, -1.0f,     1.0f, 0.0f
+    };
+    
+    glGenVertexArrays(1, &mergeVAO);
+    glGenBuffers(1, &mergeVBO);
+    
+    glBindVertexArray(mergeVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, mergeVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+    
+    // Position attribute
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    
+    // Texture coord attribute
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    
     return true;
 }
 
@@ -131,6 +162,34 @@ void Layer::drawLine(float x1, float y1, float x2, float y2, float size, const C
         float y = y1 + dy * t;
         drawPoint(x, y, size, color);
     }
+}
+
+void Layer::mergeStroke(unsigned int strokeTexture) {
+    glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+    glViewport(0, 0, width, height);
+    
+    // Use merge shader
+    mergeShader->use();
+    
+    // Set layer texture
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glUniform1i(glGetUniformLocation(mergeShader->getProgram(), "layerTexture"), 0);
+    
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, strokeTexture);
+    glUniform1i(glGetUniformLocation(mergeShader->getProgram(), "strokeTexture"), 1);
+    
+    // Disable OpenGL blending
+    glDisable(GL_BLEND);
+    
+    // Draw full screen quad
+    glBindVertexArray(mergeVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    
+    // Cleanup
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void Layer::resize(int newWidth, int newHeight) {

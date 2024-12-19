@@ -3,28 +3,48 @@
 #include <iostream>
 
 BrushSystem::BrushSystem(Canvas& canvas) 
-    : canvas(canvas), lastPos_initialized(false), lastX(0), lastY(0) {}
+    : canvas(canvas), lastPos_initialized(false), lastX(0), lastY(0),
+      isStroking(false) {
+    strokeBuffer = std::make_unique<StrokeBuffer>(canvas.getWidth(), canvas.getHeight());
+    strokeBuffer->init();
+}
+
+void BrushSystem::beginStroke() {
+    isStroking = true;
+    lastPos_initialized = false;
+    strokeBuffer->clear();
+    canvas.setStroking(true);
+    canvas.setStrokeTexture(strokeBuffer->getTexture());
+}
+
+void BrushSystem::endStroke() {
+    if (isStroking) {
+        Layer* activeLayer = canvas.getLayer(canvas.getActiveLayerIndex());
+        if (activeLayer) {
+            activeLayer->mergeStroke(strokeBuffer->getTexture());
+        }
+        isStroking = false;
+        canvas.setStroking(false);
+        canvas.setStrokeTexture(0);
+    }
+}
 
 void BrushSystem::draw(float x, float y) {
-    float texX = x;
-    float texY = y;
+    if (!isStroking) {
+        return;
+    }
     
     if (!lastPos_initialized) {
         // First point in stroke
-        canvas.drawPoint(texX, texY, brush.getSize(), brush.getColor());
+        strokeBuffer->drawPoint(x, y, brush.getSize(), brush.getColor());
         lastPos_initialized = true;
     } else {
         // Draw line from last position to current position
-        canvas.drawLine(lastX, lastY, texX, texY, brush.getSize(), brush.getColor());
+        strokeBuffer->drawLine(lastX, lastY, x, y, brush.getSize(), brush.getColor());
     }
     
-    lastX = texX;
-    lastY = texY;
-    
-    // // Debug output
-    // std::cout << "Drawing at: " << texX << ", " << texY << std::endl;
-    // std::cout << "Brush size: " << brush.getSize() << std::endl;
-    // std::cout << "Brush color: " << brush.getColor().r << ", " << brush.getColor().g << ", " << brush.getColor().b << std::endl;
+    lastX = x;
+    lastY = y;
 }
 
 void BrushSystem::updateBrushSettings(float size, const Color& color) {

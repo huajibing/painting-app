@@ -18,7 +18,7 @@ public:
     ~Layer();
     
     bool init();
-    void render();
+    // void render();
     void clear();
     
     // Basic operations
@@ -37,6 +37,7 @@ public:
     // Drawing operations (similar to current Canvas drawing methods)
     void drawPoint(float x, float y, float size, const Color& color);
     void drawLine(float x1, float y1, float x2, float y2, float size, const Color& color);
+    void mergeStroke(unsigned int strokeTexture);
     
     void resize(int width, int height);
 
@@ -55,6 +56,9 @@ private:
     unsigned int texture;
     unsigned int brushVAO;
     unsigned int brushVBO;
+    unsigned int mergeVAO;
+    unsigned int mergeVBO;
     
     std::shared_ptr<Shader> brushShader;
+    std::shared_ptr<Shader> mergeShader;
 };

@@ -108,12 +108,19 @@ void Application::handleEvents() {
     static bool wasPressed = false;
     bool isPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
 
-    // Check if left mouse button is pressed
-    if (isPressed) {
-        if (!wasPressed) {
-            brushSystem->resetDrawState();
+    // Mouse button just pressed (start new stroke)
+    if (isPressed && !wasPressed) {
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+        
+        float canvasX, canvasY;
+        if (canvas->windowToCanvas(xpos, ypos, canvasX, canvasY)) {
+            brushSystem->beginStroke();
+            brushSystem->draw(canvasX, canvasY);
         }
-
+    }
+    // Mouse button is being held
+    else if (isPressed) {
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
         
@@ -121,6 +128,10 @@ void Application::handleEvents() {
         if (canvas->windowToCanvas(xpos, ypos, canvasX, canvasY)) {
             brushSystem->draw(canvasX, canvasY);
         }
+    }
+    // Mouse button just released (end stroke)
+    else if (!isPressed && wasPressed) {
+        brushSystem->endStroke();
     }
 
     wasPressed = isPressed;

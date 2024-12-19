@@ -17,9 +17,9 @@ public:
     void resize(int windowWidth, int windowHeight);
     void clear();
     
-    // Drawing operations (redirected to active layer)
-    void drawPoint(float x, float y, float size, const Color& color);
-    void drawLine(float x1, float y1, float x2, float y2, float size, const Color& color);
+    // Stroking operations
+    void setStrokeTexture(unsigned int tex) { currentStrokeTexture = tex; }
+    void setStroking(bool stroking) { isStroking = stroking; }
     
     // Layer management
     void addLayer(const std::string& name = "New Layer");
@@ -28,7 +28,6 @@ public:
     size_t getActiveLayerIndex() const { return activeLayerIndex; }
     size_t getLayerCount() const { return layers.size(); }
     Layer* getLayer(size_t index);
-    const Layer* getLayer(size_t index) const;
     std::vector<std::unique_ptr<Layer>>& getLayers() { return layers; }
     
     // Dimension getters
@@ -68,5 +67,8 @@ private:
     
     // Shaders
     std::unique_ptr<Shader> shader;          // Main canvas shader
-    std::unique_ptr<Shader> compositeShader; // Layer compositing shader
+    // std::unique_ptr<Shader> compositeShader; // Layer compositing shader
+
+    unsigned int currentStrokeTexture;
+    bool isStroking;
 };

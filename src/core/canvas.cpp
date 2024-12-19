@@ -115,6 +115,17 @@ void Canvas::render() {
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         }
     }
+
+    // Render current stroke texture if available
+    if (isStroking && currentStrokeTexture) {
+        glUniform1f(glGetUniformLocation(shader->getProgram(), "layerOpacity"), 1.0f);
+        
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, currentStrokeTexture);
+        
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
     
     restoreViewport();
 }
@@ -147,25 +158,6 @@ Layer* Canvas::getLayer(size_t index) {
         return layers[index].get();
     }
     return nullptr;
-}
-
-const Layer* Canvas::getLayer(size_t index) const {
-    if (index < layers.size()) {
-        return layers[index].get();
-    }
-    return nullptr;
-}
-
-void Canvas::drawPoint(float x, float y, float size, const Color& color) {
-    if (activeLayerIndex < layers.size()) {
-        layers[activeLayerIndex]->drawPoint(x, y, size, color);
-    }
-}
-
-void Canvas::drawLine(float x1, float y1, float x2, float y2, float size, const Color& color) {
-    if (activeLayerIndex < layers.size()) {
-        layers[activeLayerIndex]->drawLine(x1, y1, x2, y2, size, color);
-    }
 }
 
 void Canvas::clear() {
