@@ -3,6 +3,7 @@
 #include "../utils/color.hpp"
 #include "../utils/shader.hpp"
 #include <memory>
+#include <vector>
 
 class StrokeBuffer {
 public:
@@ -15,7 +16,7 @@ public:
     
     // Drawing operations
     void drawPoint(float x, float y, float size, const Color& color);
-    void drawLine(float x1, float y1, float x2, float y2, float size, const Color& color);
+    std::vector<std::vector<float>> drawLine(float x1, float y1, float x2, float y2, float size, const Color& color);
     
     // Get the texture containing the stroke
     unsigned int getTexture() const { return texture; }

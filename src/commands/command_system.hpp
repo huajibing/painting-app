@@ -1,11 +1,11 @@
 #pragma once
-#include "../core/canvas.hpp"
-#include "../core/layer.hpp"
 #include <memory>
-#include <stack>
+#include <deque>
 #include <vector>
 
 // Forward declarations
+class Canvas;
+class Layer;
 class Command;
 class CommandManager;
 
@@ -13,6 +13,7 @@ class CommandManager;
 class Command {
 public:
     virtual ~Command() = default;
+    virtual void init() = 0;
     virtual void execute() = 0;
     virtual void undo() = 0;
     
@@ -26,20 +27,18 @@ class CommandManager {
 public:
     CommandManager(Canvas* canvas) : canvas(canvas) {}
     
-    void executeCommand(std::unique_ptr<Command> command) {
+    void addCommand(std::unique_ptr<Command> command) {
         // Clear redo stack when new command is executed
-        while (!redoStack.empty()) {
-            redoStack.pop();
-        }
+        redoStack.clear();
         
-        // Execute and store the command
+        // Store the command
         command->canvas = canvas;
-        command->execute();
-        undoStack.push(std::move(command));
+        command->init();
+        undoStack.push_back(std::move(command));
         
         // Limit undo stack size if needed
         if (undoStack.size() > maxUndoSteps) {
-            undoStack.pop();
+            undoStack.pop_front();
         }
     }
     
@@ -50,34 +49,34 @@ public:
         if (!canUndo()) return;
         
         // Get the last command
-        auto command = std::move(undoStack.top());
-        undoStack.pop();
+        auto command = std::move(undoStack.back());
+        undoStack.pop_back();
         
         // Undo it and move to redo stack
         command->undo();
-        redoStack.push(std::move(command));
+        redoStack.push_back(std::move(command));
     }
     
     void redo() {
         if (!canRedo()) return;
         
         // Get the last undone command
-        auto command = std::move(redoStack.top());
-        redoStack.pop();
+        auto command = std::move(redoStack.back());
+        redoStack.pop_back();
         
         // Execute it again and move to undo stack
         command->execute();
-        undoStack.push(std::move(command));
+        undoStack.push_back(std::move(command));
     }
     
     void clear() {
-        while (!undoStack.empty()) undoStack.pop();
-        while (!redoStack.empty()) redoStack.pop();
+        undoStack.clear();
+        redoStack.clear();
     }
     
 private:
     Canvas* canvas;
-    std::stack<std::unique_ptr<Command>> undoStack;
-    std::stack<std::unique_ptr<Command>> redoStack;
-    static const size_t maxUndoSteps = 50; // Limit memory usage
+    std::deque<std::unique_ptr<Command>> undoStack;
+    std::deque<std::unique_ptr<Command>> redoStack;
+    static const size_t maxUndoSteps = 50;
 };

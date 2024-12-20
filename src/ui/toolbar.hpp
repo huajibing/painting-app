@@ -40,7 +40,7 @@ public:
         // Size slider
         ImGui::SameLine(0, spacing);
         ImGui::SetNextItemWidth(sliderWidth);
-        bool sizeChanged = ImGui::SliderFloat("Size", &brushSize, 1.0f, 50.0f, "%.1f");
+        bool sizeChanged = ImGui::SliderFloat("Size", &brushSize, 1.0f, 200.0f, "%.1f");
         
         // Opacity slider
         ImGui::SameLine(0, spacing);

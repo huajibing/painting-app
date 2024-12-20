@@ -6,6 +6,7 @@
 #include "../utils/color.hpp"
 #include "../utils/shader.hpp"
 #include "layer.hpp"
+#include "../commands/command_system.hpp"
 
 class Canvas {
 public:
@@ -16,6 +17,13 @@ public:
     void render();
     void resize(int windowWidth, int windowHeight);
     void clear();
+
+    // Command system methods
+    CommandManager* getCommandManager() { return commandManager.get(); }
+    void undo();
+    void redo();
+    bool canUndo() const;
+    bool canRedo() const;
     
     // Stroking operations
     void setStrokeTexture(unsigned int tex) { currentStrokeTexture = tex; }
@@ -28,6 +36,7 @@ public:
     size_t getActiveLayerIndex() const { return activeLayerIndex; }
     size_t getLayerCount() const { return layers.size(); }
     Layer* getLayer(size_t index);
+    Layer* findLayerById(const std::string& id);
     std::vector<std::unique_ptr<Layer>>& getLayers() { return layers; }
     
     // Dimension getters
@@ -66,8 +75,10 @@ private:
     size_t activeLayerIndex;
     
     // Shaders
-    std::unique_ptr<Shader> shader;          // Main canvas shader
-    // std::unique_ptr<Shader> compositeShader; // Layer compositing shader
+    std::unique_ptr<Shader> shader;
+
+    // Command system
+    std::unique_ptr<CommandManager> commandManager;
 
     unsigned int currentStrokeTexture;
     bool isStroking;

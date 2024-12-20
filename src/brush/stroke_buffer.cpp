@@ -118,21 +118,28 @@ void StrokeBuffer::drawPoint(float x, float y, float size, const Color& color) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void StrokeBuffer::drawLine(float x1, float y1, float x2, float y2, float size, const Color& color) {
+std::vector<std::vector<float>> StrokeBuffer::drawLine(float x1, float y1, float x2, float y2, float size, const Color& color) {
     float dx = x2 - x1;
     float dy = y2 - y1;
     float distance = std::sqrt(dx * dx + dy * dy);
     
     int steps = std::max(2, int(distance * 2));
+
+    std::vector<std::vector<float>> points;
     
     for (int i = 0; i < steps; ++i) {
         float t = float(i) / (steps - 1);
         float x = x1 + dx * t;
         float y = y1 + dy * t;
         drawPoint(x, y, size, color);
+        std::vector<float> point = { x, y };
+        points.push_back(point);
     }
+
+    return points;
 }
 
+// Unused
 void StrokeBuffer::resize(int newWidth, int newHeight) {
     width = newWidth;
     height = newHeight;

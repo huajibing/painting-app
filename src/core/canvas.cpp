@@ -9,9 +9,14 @@ Canvas::Canvas(int w, int h)
       backgroundColor(Color(1.0f, 1.0f, 1.0f, 1.0f)),
       projection(1.0f), canvasScale(0.8f),
       VAO(0), VBO(0), EBO(0),
-      activeLayerIndex(0) {
+      activeLayerIndex(0),
+      currentStrokeTexture(0),
+      isStroking(false) {
     // Create initial background layer
     addLayer("Background");
+    
+    // Initialize command manager
+    commandManager = std::make_unique<CommandManager>(this);
 }
 
 Canvas::~Canvas() {
@@ -160,6 +165,15 @@ Layer* Canvas::getLayer(size_t index) {
     return nullptr;
 }
 
+Layer* Canvas::findLayerById(const std::string& id) {
+    for (auto& layer : layers) {
+        if (layer->getId() == id) {
+            return layer.get();
+        }
+    }
+    return nullptr;
+}
+
 void Canvas::clear() {
     for (auto& layer : layers) {
         layer->clear();
@@ -228,4 +242,24 @@ bool Canvas::windowToCanvas(double windowX, double windowY,
         return true;
     }
     return false;
+}
+
+void Canvas::undo() {
+    if (commandManager) {
+        commandManager->undo();
+    }
+}
+
+void Canvas::redo() {
+    if (commandManager) {
+        commandManager->redo();
+    }
+}
+
+bool Canvas::canUndo() const {
+    return commandManager && commandManager->canUndo();
+}
+
+bool Canvas::canRedo() const {
+    return commandManager && commandManager->canRedo();
 }

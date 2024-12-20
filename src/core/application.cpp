@@ -58,10 +58,43 @@ bool Application::init() {
     // Initialize brush system after canvas
     brushSystem = std::make_unique<BrushSystem>(*canvas);
 
+    // Connect brush system to command manager
+    brushSystem->setCommandManager(canvas->getCommandManager());
+
     // Connect brush system to UI manager
     uiManager->setBrushSystem(brushSystem.get());
-
+    
+    // Initialize UI components
     uiManager->initToolbar();
+
+    // Set up keyboard shortcuts for undo/redo
+    glfwSetKeyCallback(window, [](GLFWwindow* w, int key, int scancode, int action, int mods) {
+        auto app = static_cast<Application*>(glfwGetWindowUserPointer(w));
+        if (action == GLFW_PRESS) {
+            // Check for Ctrl+Z (Undo)
+            if (key == GLFW_KEY_Z && (mods & GLFW_MOD_CONTROL)) {
+                if (mods & GLFW_MOD_SHIFT) {
+                    // Ctrl+Shift+Z for Redo
+                    std::cout << "Redo" << std::endl;
+                    if (app->canvas && app->canvas->canRedo()) {
+                        app->canvas->redo();
+                    }
+                } else {
+                    // Ctrl+Z for Undo
+                    std::cout << "Undo" << std::endl;
+                    if (app->canvas && app->canvas->canUndo()) {
+                        app->canvas->undo();
+                    }
+                }
+            }
+            // Alternative Redo shortcut (Ctrl+Y)
+            else if (key == GLFW_KEY_Y && (mods & GLFW_MOD_CONTROL)) {
+                if (app->canvas && app->canvas->canRedo()) {
+                    app->canvas->redo();
+                }
+            }
+        }
+    });
 
     std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
     std::cout << "OpenGL Vendor: " << glGetString(GL_VENDOR) << std::endl;
@@ -114,7 +147,8 @@ void Application::handleEvents() {
         glfwGetCursorPos(window, &xpos, &ypos);
         
         float canvasX, canvasY;
-        if (canvas->windowToCanvas(xpos, ypos, canvasX, canvasY)) {
+        if (canvas->windowToCanvas(xpos, ypos, canvasX, canvasY) && 
+            canvas->getLayer(canvas->getActiveLayerIndex())) {
             brushSystem->beginStroke();
             brushSystem->draw(canvasX, canvasY);
         }

@@ -3,18 +3,19 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <stdexcept>
+
+std::atomic<uint64_t> Layer::nextId{0};
 
 Layer::Layer(int w, int h, const std::string& layerName)
     : name(layerName), isVisible(true), opacity(1.0f),
       blendMode(BlendMode::Normal), width(w), height(h),
-      frameBuffer(0), texture(0), brushVAO(0), brushVBO(0) {
+      frameBuffer(0), texture(0), id(generateId()) {
 }
 
 Layer::~Layer() {
     glDeleteFramebuffers(1, &frameBuffer);
     glDeleteTextures(1, &texture);
-    glDeleteVertexArrays(1, &brushVAO);
-    glDeleteBuffers(1, &brushVBO);
     glDeleteVertexArrays(1, &mergeVAO);
     glDeleteBuffers(1, &mergeVBO);
 }
@@ -39,11 +40,6 @@ bool Layer::init() {
         return false;
     }
     
-    // Initialize brush shader
-    brushShader = std::make_shared<Shader>(Shaders::brushVertexShader, 
-                                         Shaders::brushFragmentShader);
-    
-    setupBrushBuffers();
     clear();
     
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -87,83 +83,6 @@ void Layer::clear() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void Layer::setupBrushBuffers() {
-    std::vector<float> vertices;
-    const int segments = 32;
-    const float radius = 1.0f;
-    
-    // Center point
-    vertices.push_back(0.0f);
-    vertices.push_back(0.0f);
-    
-    // Circle vertices
-    for (int i = 0; i <= segments; ++i) {
-        float theta = 2.0f * 3.14159f * float(i) / float(segments);
-        float x = radius * cosf(theta);
-        float y = radius * sinf(theta);
-        vertices.push_back(x);
-        vertices.push_back(y);
-    }
-    
-    glGenVertexArrays(1, &brushVAO);
-    glGenBuffers(1, &brushVBO);
-    
-    glBindVertexArray(brushVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, brushVBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), 
-                 vertices.data(), GL_STATIC_DRAW);
-    
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-}
-
-void Layer::drawPoint(float x, float y, float size, const Color& color) {
-    glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
-    glViewport(0, 0, width, height);
-    
-    brushShader->use();
-    
-    // Convert coordinates to clip space
-    float clipX = (x / width) * 2.0f - 1.0f;
-    float clipY = 1.0f - (y / height) * 2.0f;
-    
-    float aspectRatio = 1.0f / (static_cast<float>(width) / height);
-    glUniform1f(glGetUniformLocation(brushShader->getProgram(), "aspectRatio"), aspectRatio);
-    glUniform2f(glGetUniformLocation(brushShader->getProgram(), "position"), clipX, clipY);
-    
-    float normalizedSize = size / static_cast<float>(height);
-    glUniform1f(glGetUniformLocation(brushShader->getProgram(), "size"), normalizedSize);
-    
-    // Adjust color alpha by layer opacity
-    glUniform4f(glGetUniformLocation(brushShader->getProgram(), "brushColor"),
-                color.r, color.g, color.b, color.a);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(brushShader->getProgram(), "layerTexture"), 0);
-    
-    glDisable(GL_BLEND);
-        
-    glBindVertexArray(brushVAO);
-    glDrawArrays(GL_TRIANGLE_FAN, 0, 34);
-    
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void Layer::drawLine(float x1, float y1, float x2, float y2, float size, const Color& color) {
-    float dx = x2 - x1;
-    float dy = y2 - y1;
-    float distance = std::sqrt(dx * dx + dy * dy);
-    
-    int steps = std::max(2, int(distance * 2));
-    
-    for (int i = 0; i < steps; ++i) {
-        float t = float(i) / (steps - 1);
-        float x = x1 + dx * t;
-        float y = y1 + dy * t;
-        drawPoint(x, y, size, color);
-    }
-}
-
 void Layer::mergeStroke(unsigned int strokeTexture) {
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
     glViewport(0, 0, width, height);
@@ -192,6 +111,7 @@ void Layer::mergeStroke(unsigned int strokeTexture) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+// Unused
 void Layer::resize(int newWidth, int newHeight) {
     // Store old texture
     GLuint oldTexture = texture;
@@ -216,4 +136,72 @@ void Layer::resize(int newWidth, int newHeight) {
     // Cleanup
     glDeleteTextures(1, &oldTexture);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+bool Layer::validateRect(const PixelRect& rect) const {
+    // Check if rectangle is within layer bounds
+    if (rect.x < 0 || rect.y < 0 || 
+        rect.width <= 0 || rect.height <= 0 ||
+        rect.x + rect.width > width ||
+        rect.y + rect.height > height) {
+        return false;
+    }
+    return true;
+}
+
+std::vector<float> Layer::getPixels(const PixelRect& rect) const {
+    if (!validateRect(rect)) {
+        throw std::invalid_argument("Invalid pixel rectangle");
+    }
+    
+    // Calculate buffer size (4 channels: RGBA)
+    size_t bufferSize = rect.width * rect.height * 4;
+    std::vector<float> pixels(bufferSize);
+    
+    // Bind framebuffer to read from
+    glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+    
+    // Read pixels from the specified rectangle
+    glReadPixels(rect.x, rect.y, rect.width, rect.height, 
+                 GL_RGBA, GL_FLOAT, pixels.data());
+    
+    // Unbind framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    
+    return pixels;
+}
+
+void Layer::setPixels(const PixelRect& rect, const std::vector<float>& pixels) {
+    if (!validateRect(rect)) {
+        throw std::invalid_argument("Invalid pixel rectangle");
+    }
+    
+    // Verify buffer size
+    size_t expectedSize = rect.width * rect.height * 4;
+    if (pixels.size() != expectedSize) {
+        throw std::invalid_argument("Invalid pixel buffer size");
+    }
+    
+    // Bind framebuffer and texture
+    glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    
+    // Store current viewport
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    
+    // Set viewport to match layer dimensions
+    glViewport(0, 0, width, height);
+    
+    // Update the texture data for the specified rectangle
+    glTexSubImage2D(GL_TEXTURE_2D, 0, rect.x, rect.y, 
+                    rect.width, rect.height, GL_RGBA, GL_FLOAT, 
+                    pixels.data());
+    
+    // Restore viewport
+    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+    
+    // Unbind framebuffer and texture
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
