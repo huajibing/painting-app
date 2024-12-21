@@ -47,7 +47,7 @@ public:
             if (ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LAYER_ITEM")) {
                     int sourceIdx = *(const int*)payload->Data;
-                    moveLayer(sourceIdx, i);
+                    canvas.moveLayer(sourceIdx, i);
                 }
                 ImGui::EndDragDropTarget();
             }

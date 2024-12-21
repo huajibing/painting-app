@@ -14,7 +14,7 @@ void StrokeCommand::init() {
 void StrokeCommand::execute() {
     if (!canvas) return;
     
-    Layer* layer = canvas->findLayerById(layerId);
+    Layer* layer = canvas->getLayerById(layerId);
     if (!layer) {
         std::cerr << "Failed to find layer with id: " << layerId << std::endl;
         return;
@@ -26,14 +26,7 @@ void StrokeCommand::execute() {
     brushSystem->disableCommand();
     
     // Set active layer and draw the stroke
-    size_t layerIndex = 0;
-    for (size_t i = 0; i < canvas->getLayerCount(); ++i) {
-        if (canvas->getLayer(i)->getId() == layerId) {
-            layerIndex = i;
-            break;
-        }
-    }
-    canvas->setActiveLayer(layerIndex);
+    canvas->setActiveLayer(canvas->getLayerIndexById(layerId));
     
     // Draw the stroke points
     brushSystem->beginStroke();
@@ -46,7 +39,7 @@ void StrokeCommand::execute() {
 void StrokeCommand::undo() {
     if (!canvas || originalPixels.empty()) return;
     
-    Layer* layer = canvas->findLayerById(layerId);
+    Layer* layer = canvas->getLayerById(layerId);
     if (!layer) return;
 
     try {
@@ -92,7 +85,7 @@ void StrokeCommand::calculateBounds() {
 }
 
 void StrokeCommand::captureOriginalPixels() {
-    Layer* layer = canvas->findLayerById(layerId);
+    Layer* layer = canvas->getLayerById(layerId);
     if (layer) {
         savedRect = strokeBoundsToRect(bounds.x, bounds.y, 
                                      bounds.width, bounds.height,

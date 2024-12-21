@@ -2,6 +2,7 @@
 #include <glad/glad.h>
 #include <iostream>
 #include "../utils/shaders.hpp"
+#include "../commands/layer_commands.hpp"
 
 Canvas::Canvas(int w, int h)
     : textureWidth(w), textureHeight(h),
@@ -135,16 +136,27 @@ void Canvas::render() {
     restoreViewport();
 }
 
-void Canvas::addLayer(const std::string& name) {
-    auto layer = std::make_unique<Layer>(textureWidth, textureHeight, name);
+void Canvas::addLayer(const std::string& name, bool addToCommandStack) {
+    auto layer = std::make_unique<Layer>(textureWidth, textureHeight, name, commandManager.get());
     if (layer->init()) {
         layers.push_back(std::move(layer));
         activeLayerIndex = layers.size() - 1;
+
+        // Create command for adding the layer
+        if (commandManager && addToCommandStack) {
+            auto command = std::make_unique<AddLayerCommand>(name, layers.back()->getId());
+            commandManager->addCommand(std::move(command));
+        }
     }
 }
 
-void Canvas::removeLayer(size_t index) {
+void Canvas::removeLayer(size_t index, bool addToCommandStack) {
     if (index < layers.size() && layers.size() > 1) {  // Keep at least one layer
+        // Create command for removing the layer
+        if (commandManager && addToCommandStack) {
+            auto command = std::make_unique<RemoveLayerCommand>(layers[index]->getId(), index);
+            commandManager->addCommand(std::move(command));
+        }
         layers.erase(layers.begin() + index);
         if (activeLayerIndex >= layers.size()) {
             activeLayerIndex = layers.size() - 1;
@@ -158,6 +170,83 @@ void Canvas::setActiveLayer(size_t index) {
     }
 }
 
+void Canvas::moveLayer(size_t sourceIdx, size_t targetIdx, bool addToCommandStack) {
+    if (sourceIdx == targetIdx || 
+        sourceIdx >= layers.size() || 
+        targetIdx >= layers.size()) {
+        return;
+    }
+
+    // Create command for moving the layer
+    if (commandManager && addToCommandStack) {
+        auto command = std::make_unique<MoveLayerCommand>(sourceIdx, targetIdx);
+        commandManager->addCommand(std::move(command));
+    }
+    
+    // Store the active layer index
+    size_t activeIdx = activeLayerIndex;
+    
+    // Move the layer
+    auto temp = std::move(layers[sourceIdx]);
+    layers.erase(layers.begin() + sourceIdx);
+    layers.insert(layers.begin() + targetIdx, std::move(temp));
+    
+    // Update active layer index if needed
+    if (activeIdx == sourceIdx) {
+        activeLayerIndex = targetIdx;
+    } else if (activeIdx > sourceIdx && activeIdx <= targetIdx) {
+        activeLayerIndex = activeIdx - 1;
+    } else if (activeIdx < sourceIdx && activeIdx >= targetIdx) {
+        activeLayerIndex = activeIdx + 1;
+    }
+}
+
+void Canvas::duplicateLayer(size_t index, bool addToCommandStack) {
+    if (index >= layers.size()) {
+        return;
+    }
+
+    Layer* sourceLayer = layers[index].get();
+    if (!sourceLayer) {
+        return;
+    }
+
+    // Create a new layer with a copy of the name
+    std::string newName = sourceLayer->getName() + " Copy";
+    addLayer(newName);
+    auto newLayer = std::make_unique<Layer>(textureWidth, textureHeight, newName);
+    
+    // Initialize the new layer
+    if (!newLayer->init()) {
+        return;
+    }
+
+    // Copy the layer properties
+    newLayer->setOpacity(sourceLayer->getOpacity());
+    newLayer->setBlendMode(sourceLayer->getBlendMode());
+    newLayer->setVisibility(sourceLayer->getVisibility());
+
+    // Copy the layer content
+    PixelRect fullRect{0, 0, textureWidth, textureHeight};
+    std::vector<float> pixels = sourceLayer->getPixels(fullRect);
+    newLayer->setPixels(fullRect, pixels);
+
+    // Create command for duplicating the layer
+    if (commandManager && addToCommandStack) {
+        auto command = std::make_unique<DuplicateLayerCommand>(sourceLayer->getId(), newLayer->getId());
+        commandManager->addCommand(std::move(command));
+    }
+
+    // Insert the new layer after the source layer
+    auto insertPos = layers.begin() + index + 1;
+    layers.insert(insertPos, std::move(newLayer));
+
+    // Update active layer index if needed
+    if (activeLayerIndex > index) {
+        activeLayerIndex++;
+    }
+}
+
 Layer* Canvas::getLayer(size_t index) {
     if (index < layers.size()) {
         return layers[index].get();
@@ -165,13 +254,22 @@ Layer* Canvas::getLayer(size_t index) {
     return nullptr;
 }
 
-Layer* Canvas::findLayerById(const std::string& id) {
+Layer* Canvas::getLayerById(const std::string& id) {
     for (auto& layer : layers) {
         if (layer->getId() == id) {
             return layer.get();
         }
     }
     return nullptr;
+}
+
+size_t Canvas::getLayerIndexById(const std::string& id) {
+    for (size_t i = 0; i < layers.size(); ++i) {
+        if (layers[i]->getId() == id) {
+            return i;
+        }
+    }
+    return 0;
 }
 
 void Canvas::clear() {

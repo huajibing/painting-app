@@ -30,13 +30,16 @@ public:
     void setStroking(bool stroking) { isStroking = stroking; }
     
     // Layer management
-    void addLayer(const std::string& name = "New Layer");
-    void removeLayer(size_t index);
+    void addLayer(const std::string& name = "New Layer", bool addToCommandStack = true);
+    void removeLayer(size_t index, bool addToCommandStack = true);
     void setActiveLayer(size_t index);
+    void moveLayer(size_t sourceIdx, size_t targetIdx, bool addToCommandStack = true);
+    void duplicateLayer(size_t index, bool addToCommandStack = true);
     size_t getActiveLayerIndex() const { return activeLayerIndex; }
     size_t getLayerCount() const { return layers.size(); }
     Layer* getLayer(size_t index);
-    Layer* findLayerById(const std::string& id);
+    Layer* getLayerById(const std::string& id);
+    size_t getLayerIndexById(const std::string& id);
     std::vector<std::unique_ptr<Layer>>& getLayers() { return layers; }
     
     // Dimension getters

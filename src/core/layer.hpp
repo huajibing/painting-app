@@ -7,6 +7,7 @@
 #include "../utils/color.hpp"
 #include "../utils/shader.hpp"
 #include "../utils/pixel_rect.hpp"
+#include "../commands/command_system.hpp"
 
 enum class BlendMode {
     Normal,
@@ -17,24 +18,26 @@ enum class BlendMode {
 
 class Layer {
 public:
-    Layer(int width, int height, const std::string& name = "New Layer");
+    Layer(int width, int height, const std::string& name = "New Layer", CommandManager* manager = nullptr);
     ~Layer();
     
     bool init();
-    void clear();
+    void clear(); // This action will not be added to the command stack
+    void manualClear();
+    void setCommandManager(CommandManager* manager) { commandManager = manager; }
 
     // Generate unique ID
     static std::string generateId() {
         uint64_t currentId = nextId.fetch_add(1, std::memory_order_relaxed);
         return "layer_" + std::to_string(currentId);
     }
-    const std::string& getId() const { return id; }
+    void setId(const std::string& newId) { id = newId; }
     
     // Basic operations
-    void setVisibility(bool visible) { isVisible = visible; }
-    void setOpacity(float value) { opacity = value; }
-    void setBlendMode(BlendMode mode) { blendMode = mode; }
-    void setName(const std::string& newName) { name = newName; }
+    void setVisibility(bool visible, bool addToCommandStack = true);
+    void setOpacity(float value);
+    void setBlendMode(BlendMode mode, bool addToCommandStack = true);
+    void setName(const std::string& newName, bool addToCommandStack = true);
     
     // Getters
     bool getVisibility() const { return isVisible; }
@@ -42,6 +45,7 @@ public:
     BlendMode getBlendMode() const { return blendMode; }
     const std::string& getName() const { return name; }
     unsigned int getTexture() const { return texture; }
+    const std::string& getId() const { return id; }
     
     void mergeStroke(unsigned int strokeTexture);
     
@@ -55,8 +59,6 @@ public:
     bool validateRect(const PixelRect& rect) const;
 
 private:
-    void setupBrushBuffers();
-    
     static std::atomic<uint64_t> nextId;
     std::string id;
     std::string name;
@@ -75,4 +77,6 @@ private:
     std::shared_ptr<Shader> mergeShader;
 
     mutable std::vector<float> pixelBuffer;
+
+    CommandManager* commandManager;
 };

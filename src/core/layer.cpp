@@ -1,16 +1,19 @@
 #include "layer.hpp"
 #include "../utils/shaders.hpp"
+#include "../commands/layer_commands.hpp"
 #include <iostream>
 #include <vector>
 #include <cmath>
 #include <stdexcept>
+#include <algorithm>
 
 std::atomic<uint64_t> Layer::nextId{0};
 
-Layer::Layer(int w, int h, const std::string& layerName)
+Layer::Layer(int w, int h, const std::string& layerName, CommandManager* manager)
     : name(layerName), isVisible(true), opacity(1.0f),
       blendMode(BlendMode::Normal), width(w), height(h),
-      frameBuffer(0), texture(0), id(generateId()) {
+      frameBuffer(0), texture(0), id(generateId()),
+      commandManager(manager) {
 }
 
 Layer::~Layer() {
@@ -75,12 +78,52 @@ bool Layer::init() {
     return true;
 }
 
+void Layer::setVisibility(bool visible, bool addToCommandStack) {
+    // Create command for modifying layer visibility
+    if (commandManager && addToCommandStack) {
+        auto command = std::make_unique<ModifyLayerCommand>(id, ModifyLayerCommand::PropertyType::Visibility, visible);
+        commandManager->addCommand(std::move(command));
+    }
+    isVisible = visible;
+}
+
+void Layer::setOpacity(float value) {
+    opacity = std::clamp(value, 0.0f, 1.0f);
+}
+
+void Layer::setBlendMode(BlendMode mode, bool addToCommandStack) {
+    // Create command for modifying layer blend mode
+    if (commandManager && addToCommandStack) {
+        auto command = std::make_unique<ModifyLayerCommand>(id, ModifyLayerCommand::PropertyType::BlendMode, mode);
+        commandManager->addCommand(std::move(command));
+    }
+    blendMode = mode;
+}
+
+void Layer::setName(const std::string& newName, bool addToCommandStack) {
+    // Create command for modifying layer name
+    if (commandManager && addToCommandStack) {
+        auto command = std::make_unique<ModifyLayerCommand>(id, ModifyLayerCommand::PropertyType::Name, newName);
+        commandManager->addCommand(std::move(command));
+    }
+    name = newName;
+}
+
 void Layer::clear() {
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
     glViewport(0, 0, width, height);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Layer::manualClear() {
+    // Create command for clearing the layer
+    if (commandManager) {
+        auto command = std::make_unique<ClearLayerCommand>(id);
+        commandManager->addCommand(std::move(command));
+    }
+    clear();
 }
 
 void Layer::mergeStroke(unsigned int strokeTexture) {
