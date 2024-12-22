@@ -109,7 +109,8 @@ void Canvas::render() {
                         GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     
     // Render each visible layer from bottom to top
-    for (const auto& layer : layers) {
+    for (size_t i = 0; i < layers.size(); ++i) {
+        auto layer = layers[i].get();
         if (layer->getVisibility()) {
             glUniform1f(glGetUniformLocation(shader->getProgram(), "layerOpacity"), 
                        layer->getOpacity());
@@ -119,18 +120,18 @@ void Canvas::render() {
             
             glBindVertexArray(VAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        }
-    }
 
-    // Render current stroke texture if available
-    if (isStroking && currentStrokeTexture) {
-        glUniform1f(glGetUniformLocation(shader->getProgram(), "layerOpacity"), 1.0f);
-        
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, currentStrokeTexture);
-        
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            if (i == activeLayerIndex && isStroking && currentStrokeTexture) {
+                glUniform1f(glGetUniformLocation(shader->getProgram(), "layerOpacity"), 
+                            layer->getOpacity());
+                
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, currentStrokeTexture);
+                
+                glBindVertexArray(VAO);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            }
+        }
     }
     
     restoreViewport();
