@@ -13,6 +13,7 @@ void BrushSystem::beginStroke() {
     isStroking = true;
     lastPos_initialized = false;
     strokeBuffer->clear();
+    strokeBuffer->beginStroke(brushSettings.type);
     canvas.setStroking(true);
     canvas.setStrokeTexture(strokeBuffer->getTexture());
     currentStrokePoints.clear();
@@ -22,18 +23,23 @@ void BrushSystem::endStroke() {
     if (isStroking) {
         if (commandEnabled && !currentStrokePoints.empty() && commandManager) {
             auto command = createStrokeCommand();
+            command->setCanvas(&canvas);
+            command->captureOriginalPixels();
+
+            Layer* activeLayer = canvas.getLayer(canvas.getActiveLayerIndex());
+            if (activeLayer) {
+                activeLayer->mergeStroke(strokeBuffer->getTexture());
+            }
+            
+            isStroking = false;
+            canvas.setStroking(false);
+            canvas.setStrokeTexture(0);
+            currentStrokePoints.clear();
+            strokeBuffer->endStroke();
+
+            command->captureSavedPixels();
             commandManager->addCommand(std::move(command));
         }
-        
-        Layer* activeLayer = canvas.getLayer(canvas.getActiveLayerIndex());
-        if (activeLayer) {
-            activeLayer->mergeStroke(strokeBuffer->getTexture());
-        }
-        
-        isStroking = false;
-        canvas.setStroking(false);
-        canvas.setStrokeTexture(0);
-        currentStrokePoints.clear();
     }
 }
 
@@ -44,13 +50,13 @@ void BrushSystem::draw(float x, float y) {
     
     if (!lastPos_initialized) {
         // First point in stroke
-        strokeBuffer->drawPoint(x, y, brush.getSize(), brush.getColor());
+        strokeBuffer->drawPoint(x, y, brushSettings.size, brushSettings.color);
         lastPos_initialized = true;
         StrokePoint point(x, y);
         currentStrokePoints.push_back(point);
     } else {
         // Draw line from last position to current position
-        std::vector<std::vector<float>> points = strokeBuffer->drawLine(lastX, lastY, x, y, brush.getSize(), brush.getColor());
+        std::vector<std::vector<float>> points = strokeBuffer->drawLine(lastX, lastY, x, y, brushSettings.size, brushSettings.color);
         for (const auto& point : points) {
             StrokePoint strokePoint(point[0], point[1]);
             currentStrokePoints.push_back(strokePoint);
@@ -61,17 +67,9 @@ void BrushSystem::draw(float x, float y) {
     lastY = y;
 }
 
-void BrushSystem::drawPoint(float x, float y) {
-    if (!isStroking) {
-        return;
-    }
-    
-    strokeBuffer->drawPoint(x, y, brush.getSize(), brush.getColor());
-}
-
 void BrushSystem::updateBrushSettings(float size, const Color& color) {
-    brush.setSize(size);
-    brush.setColor(color);
+    brushSettings.size = size;
+    brushSettings.color = color;
 }
 
 std::unique_ptr<StrokeCommand> BrushSystem::createStrokeCommand() {
@@ -82,8 +80,8 @@ std::unique_ptr<StrokeCommand> BrushSystem::createStrokeCommand() {
 
     return std::make_unique<StrokeCommand>(
         currentStrokePoints,
-        brush.getSize(),
-        brush.getColor(),
+        brushSettings.size,
+        brushSettings.color,
         activeLayer->getId()
     );
 }

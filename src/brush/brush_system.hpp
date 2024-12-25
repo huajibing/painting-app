@@ -1,10 +1,15 @@
 #pragma once
-#include "basic_brush.hpp"
 #include "../core/canvas.hpp"
 #include "stroke_buffer.hpp"
 #include "../commands/draw_commands.hpp"
 #include <memory>
 #include <vector>
+
+struct BrushSettings {
+    float size = 20.0f;
+    Color color = Color(0.0f, 0.0f, 0.0f, 1.0f);
+    BrushType type = BrushType::BaseCircle;
+}; 
 
 class BrushSystem {
 public:
@@ -13,14 +18,14 @@ public:
     void beginStroke();
     void endStroke();
     void draw(float x, float y);
-    void drawPoint(float x, float y);
+    void setBrushType(BrushType type) { brushSettings.type = type; };
     void updateBrushSettings(float size, const Color& color);
     void setCommandManager(CommandManager* manager) { commandManager = manager; }
     void disableCommand() { commandEnabled = false; }
     
 private:
     Canvas& canvas;
-    BasicBrush brush;
+    BrushSettings brushSettings;
     bool lastPos_initialized;
     float lastX, lastY;
     

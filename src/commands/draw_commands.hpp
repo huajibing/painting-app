@@ -58,13 +58,16 @@ public:
         std::cout << "StrokeCommand created" << std::endl;
     }
     
-    void init() override;
+    void init() override {}
     void execute() override;
     void undo() override;
+
+    void setCanvas(Canvas* canvas) { this->canvas = canvas; }
+    void captureOriginalPixels();
+    void captureSavedPixels();
     
 private:
     void calculateBounds();
-    void captureOriginalPixels();
     
     std::vector<StrokePoint> points;
     float brushSize;
@@ -76,5 +79,6 @@ private:
     } bounds;
     
     std::vector<float> originalPixels;
+    std::vector<float> savedPixels;
     PixelRect savedRect;
 };

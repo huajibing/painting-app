@@ -4,13 +4,6 @@
 #include "../core/layer.hpp"
 #include <iostream>
 
-void StrokeCommand::init() {
-    if (!canvas) return;
-    
-    calculateBounds();
-    captureOriginalPixels();
-}
-
 void StrokeCommand::execute() {
     if (!canvas) return;
     
@@ -19,21 +12,8 @@ void StrokeCommand::execute() {
         std::cerr << "Failed to find layer with id: " << layerId << std::endl;
         return;
     }
-
-    // Create brush system for drawing
-    std::unique_ptr<BrushSystem> brushSystem = std::make_unique<BrushSystem>(*canvas);
-    brushSystem->updateBrushSettings(brushSize, brushColor);
-    brushSystem->disableCommand();
     
-    // Set active layer and draw the stroke
-    canvas->setActiveLayer(canvas->getLayerIndexById(layerId));
-    
-    // Draw the stroke points
-    brushSystem->beginStroke();
-    for (size_t i = 0; i < points.size(); ++i) {
-        brushSystem->drawPoint(points[i].x, points[i].y);
-    }
-    brushSystem->endStroke();
+    layer->setPixels(savedRect, savedPixels);
 }
 
 void StrokeCommand::undo() {
@@ -85,11 +65,19 @@ void StrokeCommand::calculateBounds() {
 }
 
 void StrokeCommand::captureOriginalPixels() {
+    calculateBounds();
     Layer* layer = canvas->getLayerById(layerId);
     if (layer) {
         savedRect = strokeBoundsToRect(bounds.x, bounds.y, 
                                      bounds.width, bounds.height,
                                      canvas->getWidth(), canvas->getHeight());
         originalPixels = layer->getPixels(savedRect);
+    }
+}
+
+void StrokeCommand::captureSavedPixels() {
+    Layer* layer = canvas->getLayerById(layerId);
+    if (layer) {
+        savedPixels = layer->getPixels(savedRect);
     }
 }
