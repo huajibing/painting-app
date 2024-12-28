@@ -5,10 +5,13 @@
 #include <memory>
 #include <vector>
 #include "base_brush.hpp"
+#include "texture_brush.hpp"
 
 enum class BrushType {
     BaseCircle,
-    BaseSquare
+    BaseSquare,
+    TexturePencil,
+    TextureAcrylic
 };
 
 class BrushFactory {
@@ -16,6 +19,7 @@ public:
     static std::shared_ptr<Brush> createBrush(
         BrushType type,
         unsigned int framebuffer,
+        unsigned int texture,
         int width, 
         int height
     ) {
@@ -24,6 +28,10 @@ public:
                 return std::make_shared<BaseBrush::CircleBrush>(framebuffer, width, height);
             case BrushType::BaseSquare:
                 return std::make_shared<BaseBrush::SquareBrush>(framebuffer, width, height);
+            case BrushType::TexturePencil:
+                return std::make_shared<TextureBrush::PencilBrush>(framebuffer, texture, width, height);
+            case BrushType::TextureAcrylic:
+                return std::make_shared<TextureBrush::AcrylicBrush>(framebuffer, texture, width, height);
             default:
                 return std::make_shared<BaseBrush::CircleBrush>(framebuffer, width, height);
         }

@@ -5,6 +5,20 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <iostream>
+#include "../brush/texture_generator.hpp"
+
+void generateBrushTextures() {
+    BrushTextureGenerator generator;
+    
+    int size = 512;
+    auto scatterData = generator.generateScatterBrush(size, 600);
+    // stbi_write_png("assets/brushes/scatter_brush.png", size, size, 4, 
+    //                scatterData.data(), size * 4);
+
+    auto roughData = generator.generateRoughBrush(size, 0.1f, 30.0f, 24);
+    // stbi_write_png("assets/brushes/rough_brush.png", size, size, 4, 
+    //                roughData.data(), size * 4);
+}
 
 Application::Application() : shouldClose(false) {}
 
@@ -103,6 +117,9 @@ bool Application::init() {
     int width, height;
     glfwGetFramebufferSize(uiManager->getWindow(), &width, &height);
     canvas->resize(width, height);
+
+    // Generate brush textures
+    generateBrushTextures();
         
     return true;
 }

@@ -7,6 +7,7 @@ BrushSystem::BrushSystem(Canvas& canvas)
       isStroking(false), commandManager(nullptr), commandEnabled(true) {
     strokeBuffer = std::make_unique<StrokeBuffer>(canvas.getWidth(), canvas.getHeight());
     strokeBuffer->init();
+    setBrushType(BrushType::TextureAcrylic);
 }
 
 void BrushSystem::beginStroke() {

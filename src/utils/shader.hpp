@@ -29,6 +29,10 @@ public:
         glUniform4fv(glGetUniformLocation(program, name.c_str()), 1, &value[0]);
     }
 
+    void setInt(const std::string& name, int value) const {
+        glUniform1i(glGetUniformLocation(program, name.c_str()), value);
+    }
+
 private:
     unsigned int program;
     unsigned int compileShader(unsigned int type, const std::string& source);

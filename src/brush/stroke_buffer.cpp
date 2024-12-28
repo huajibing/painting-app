@@ -61,7 +61,7 @@ std::vector<std::vector<float>> StrokeBuffer::drawLine(float x1, float y1, float
 }
 
 void StrokeBuffer::beginStroke(BrushType type) {
-    brush = BrushFactory::createBrush(type, frameBuffer, width, height);
+    brush = BrushFactory::createBrush(type, frameBuffer, getTexture(), width, height);
     brush->init();
     brush->beginStroke();
 }
