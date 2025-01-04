@@ -1,40 +1,63 @@
 #pragma once
+#include <imgui.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "../brush/brush_system.hpp"
 #include "../core/canvas.hpp"
-#include "layer_panel.hpp"
-#include "toolbar.hpp"
 
 class UIManager {
 public:
     UIManager();
-    ~UIManager();
+    ~UIManager() { cleanup(); }
     
     bool init();
     void render();
     bool shouldClose() const;
-    GLFWwindow* getWindow() const { return window; }
-    void setBrushSystem(BrushSystem* bs) { brushSystem = bs; }
-    void setCanvas(Canvas* c) { canvas = c; }
-    void initToolbar() {
-        if (canvas) {
-            layerPanel = std::make_unique<LayerPanel>(*canvas);
-        }
-        if (canvas && brushSystem) {
-            toolbar = std::make_unique<Toolbar>(*canvas, *brushSystem);
-        }
-    }
     
+    void setBrushSystem(BrushSystem* bs);
+    void setCanvas(Canvas* c);
+    
+    GLFWwindow* getWindow() const { return window; }
+
+    // Canvas coordinate conversion
+    bool windowToCanvas(double windowX, double windowY, float& canvasX, float& canvasY) const {
+        if (!canvas) return false;
+        
+        // Check if the point is within the canvas area
+        if (windowX < canvasDisplayPos.x || windowX >= canvasDisplayPos.x + canvasDisplaySize.x ||
+            windowY < canvasDisplayPos.y || windowY >= canvasDisplayPos.y + canvasDisplaySize.y) {
+            return false;
+        }
+
+        // Convert to canvas coordinates
+        float normalizedX = (windowX - canvasDisplayPos.x) / canvasDisplaySize.x;
+        float normalizedY = (windowY - canvasDisplayPos.y) / canvasDisplaySize.y;
+        
+        canvasX = normalizedX * canvas->getWidth();
+        canvasY = normalizedY * canvas->getHeight();
+        
+        return true;
+    }
+
 private:
+    void cleanup();
+    void setupStyle();
+    
     GLFWwindow* window;
     BrushSystem* brushSystem;
     Canvas* canvas;
-    std::unique_ptr<LayerPanel> layerPanel;
-    std::unique_ptr<Toolbar> toolbar;
-    void setupStyle();
-
+    
+    // UI state
     float brushColor[3];
     float brushSize;
     float brushOpacity;
+    bool sidebarVisible;
+    
+    // Canvas display info
+    ImVec2 canvasDisplayPos;
+    ImVec2 canvasDisplaySize;
+    
+    // Cache last frame state
+    ImVec2 lastWindowSize;
+    bool lastFrameValid = false;
 };

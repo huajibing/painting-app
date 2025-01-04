@@ -2,11 +2,19 @@
 #include <vector>
 #include <memory>
 #include <glm/glm.hpp>
+#include <imgui.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include "../utils/color.hpp"
 #include "../utils/shader.hpp"
 #include "layer.hpp"
 #include "../commands/command_system.hpp"
+
+struct CanvasTransform {
+    ImVec2 displayPos;
+    ImVec2 displaySize;
+    int textureWidth;
+    int textureHeight;
+};
 
 class Canvas {
 public:
@@ -48,22 +56,19 @@ public:
     
     // Canvas rectangle and coordinate conversion
     void getCanvasRect(int& x, int& y, int& w, int& h) const;
-    bool windowToCanvas(double windowX, double windowY, float& canvasX, float& canvasY) const;
+
+    // Composite texture access
+    unsigned int getCompositeTexture() const;
     
 private:
     void setupQuad();
-    void updateProjection();
-    void saveViewport();
-    void restoreViewport();
+    void setupCompositeBuffer();
     
     // Canvas dimensions
     int textureWidth;
     int textureHeight;
-    int displayWidth;
-    int displayHeight;
     int windowWidth;
     int windowHeight;
-    GLint savedViewport[4];
     
     // Canvas properties
     Color backgroundColor;
@@ -72,6 +77,8 @@ private:
     
     // Rendering objects
     unsigned int VAO, VBO, EBO;
+    unsigned int compositeFramebuffer;
+    unsigned int compositeTexture;
     
     // Layers
     std::vector<std::unique_ptr<Layer>> layers;

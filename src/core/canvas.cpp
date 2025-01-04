@@ -32,6 +32,9 @@ bool Canvas::init() {
         shader = std::make_unique<Shader>(Shaders::canvasVertexShader, 
                                         Shaders::canvasFragmentShader);
         
+        // Setup composite buffer
+        setupCompositeBuffer();
+
         // Setup quad for rendering
         setupQuad();
         
@@ -85,18 +88,39 @@ void Canvas::setupQuad() {
     glEnableVertexAttribArray(1);
 }
 
-void Canvas::render() {
-    saveViewport();
-    glViewport(0, 0, windowWidth, windowHeight);
+void Canvas::setupCompositeBuffer() {
+    // Create framebuffer
+    glGenFramebuffers(1, &compositeFramebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, compositeFramebuffer);
     
-    // Clear the canvas area
-    glEnable(GL_SCISSOR_TEST);
-    int canvasX, canvasY, canvasWidth, canvasHeight;
-    getCanvasRect(canvasX, canvasY, canvasWidth, canvasHeight);
-    glScissor(canvasX, canvasY, canvasWidth, canvasHeight);
+    // Create texture
+    glGenTextures(1, &compositeTexture);
+    glBindTexture(GL_TEXTURE_2D, compositeTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, textureWidth, textureHeight, 
+                 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    // Attach texture to framebuffer
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 
+                          GL_TEXTURE_2D, compositeTexture, 0);
+    
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "Composite framebuffer is not complete!" << std::endl;
+    }
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void Canvas::render() {
+    if (compositeFramebuffer == 0) {
+        setupCompositeBuffer();
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, compositeFramebuffer);
+    glViewport(0, 0, textureWidth, textureHeight);
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    glDisable(GL_SCISSOR_TEST);
     
     shader->use();
     glUniformMatrix4fv(glGetUniformLocation(shader->getProgram(), "projection"), 
@@ -109,6 +133,7 @@ void Canvas::render() {
                         GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     
     // Render each visible layer from bottom to top
+    glBindVertexArray(VAO);
     for (size_t i = 0; i < layers.size(); ++i) {
         auto layer = layers[i].get();
         if (layer->getVisibility()) {
@@ -134,7 +159,11 @@ void Canvas::render() {
         }
     }
     
-    restoreViewport();
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+unsigned int Canvas::getCompositeTexture() const {
+    return compositeTexture;
 }
 
 void Canvas::addLayer(const std::string& name, bool addToCommandStack) {
@@ -282,35 +311,6 @@ void Canvas::clear() {
 void Canvas::resize(int wWidth, int wHeight) {
     windowWidth = wWidth;
     windowHeight = wHeight;
-    updateProjection();
-}
-
-void Canvas::updateProjection() {
-    // Compute display size based on texture aspect ratio
-    float aspectRatio = (float)textureWidth / textureHeight;
-    float windowAspect = (float)windowWidth / windowHeight;
-    
-    if (windowAspect > aspectRatio) {
-        displayHeight = windowHeight * canvasScale;
-        displayWidth = displayHeight * aspectRatio;
-    } else {
-        displayWidth = windowWidth * canvasScale;
-        displayHeight = displayWidth / aspectRatio;
-    }
-
-    float scaleX = (float)displayWidth / windowWidth;
-    float scaleY = (float)displayHeight / windowHeight;
-    
-    projection = glm::mat4(1.0f);
-    projection = glm::scale(projection, glm::vec3(scaleX, scaleY, 1.0f));
-}
-
-void Canvas::saveViewport() {
-    glGetIntegerv(GL_VIEWPORT, savedViewport);
-}
-
-void Canvas::restoreViewport() {
-    glViewport(savedViewport[0], savedViewport[1], savedViewport[2], savedViewport[3]);
 }
 
 void Canvas::getCanvasRect(int& x, int& y, int& w, int& h) const {
@@ -327,20 +327,6 @@ void Canvas::getCanvasRect(int& x, int& y, int& w, int& h) const {
     
     x = (windowWidth - w) / 2;
     y = (windowHeight - h) / 2;
-}
-
-bool Canvas::windowToCanvas(double windowX, double windowY, 
-                          float& canvasX, float& canvasY) const {
-    float canvasLeft = (windowWidth - displayWidth) * 0.5f;
-    float canvasTop = (windowHeight - displayHeight) * 0.5f;
-    
-    if (windowX >= canvasLeft && windowX < canvasLeft + displayWidth &&
-        windowY >= canvasTop && windowY < canvasTop + displayHeight) {
-        canvasX = (windowX - canvasLeft) / displayWidth * textureWidth;
-        canvasY = (windowY - canvasTop) / displayHeight * textureHeight;
-        return true;
-    }
-    return false;
 }
 
 void Canvas::undo() {
