@@ -5,6 +5,7 @@
 #include "../brush/brush_system.hpp"
 #include "../core/canvas.hpp"
 #include "../file/file_system.hpp"
+#include "cursor_manager.hpp"
 
 #define ICON_MIN_FA 0xe005
 #define ICON_MAX_FA 0xf8ff
@@ -27,6 +28,7 @@
 #define ICON_FA_GEAR "\xef\x80\x93"           // f013
 #define ICON_FA_TRASH "\xef\x87\xb8"          // f2ed
 #define ICON_FA_ARROW_POINTER "\xef\x89\x85"  // f245
+#define ICON_FA_GRIP_LINES "\xef\x9e\xa4"     // f7a4
 
 class UIManager {
 public:
@@ -84,6 +86,7 @@ private:
     BrushSystem* brushSystem;
     Canvas* canvas;
     FileSystem* fileSystem;
+    std::unique_ptr<CursorManager> cursorManager;
     
     // UI state
     float brushColor[3];

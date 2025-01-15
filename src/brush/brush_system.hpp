@@ -19,6 +19,7 @@ public:
     void endStroke();
     void draw(float x, float y);
     void setBrushType(BrushType type) { brushSettings.type = type; };
+    BrushType getBrushType() const { return brushSettings.type; };
     void updateBrushSettings(float size, const Color& color);
     void setCommandManager(CommandManager* manager) { commandManager = manager; }
     void disableCommand() { commandEnabled = false; }

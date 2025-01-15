@@ -52,6 +52,8 @@ bool UIManager::init() {
     
     // Setup ImGui style
     setupStyle();
+
+    cursorManager = std::make_unique<CursorManager>(window);
     
     return true;
 }
@@ -68,7 +70,7 @@ void UIManager::render() {
     
     // Constants
     const float leftToolbarWidth = 100.0f;
-    const float rightPanelWidth = 340.0f;
+    const float rightPanelWidth = 380.0f;
     const float menuBarHeight = 70.0f;
     
     // Main menu bar
@@ -503,15 +505,34 @@ void UIManager::renderRightPanel(float x, float y, float width, float height) {
         ImGuiWindowFlags_NoMove)) {
         
         // Brush Type Section
+        std::string brushTypeLabel = "Brush Type";
+        if (brushSystem->getBrushType() == BrushType::TextureAcrylic) {
+            brushTypeLabel = "Acrylic";
+        } else if (brushSystem->getBrushType() == BrushType::TexturePencil) {
+            brushTypeLabel = "Pencil";
+        } else if (brushSystem->getBrushType() == BrushType::BaseCircle) {
+            brushTypeLabel = "Circle";
+        } else if (brushSystem->getBrushType() == BrushType::BaseSquare) {
+            brushTypeLabel = "Square";
+        }
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
         ImGui::PushFont(largeBoldFont);
         ImGui::TextUnformatted(ICON_FA_BRUSH "  Brush Type");
         ImGui::PopFont();
         ImGui::SetNextItemWidth(-1);
-        if (ImGui::BeginCombo("##BrushType", "Standard Pencil", ImGuiComboFlags_NoArrowButton)) {
-            if (ImGui::Selectable("Standard Pencil", true)) {}
-            if (ImGui::Selectable("Watercolor", false)) {}
-            if (ImGui::Selectable("Ink Pen", false)) {}
+        if (ImGui::BeginCombo("##BrushType", brushTypeLabel.c_str(), ImGuiComboFlags_NoArrowButton)) {
+            if (ImGui::Selectable("Acrylic", brushSystem->getBrushType() == BrushType::TextureAcrylic)) {
+                brushSystem->setBrushType(BrushType::TextureAcrylic);
+            }
+            if (ImGui::Selectable("Pencil", brushSystem->getBrushType() == BrushType::TexturePencil)) {
+                brushSystem->setBrushType(BrushType::TexturePencil);
+            }
+            if (ImGui::Selectable("Circle", brushSystem->getBrushType() == BrushType::BaseCircle)) {
+                brushSystem->setBrushType(BrushType::BaseCircle);
+            }
+            if (ImGui::Selectable("Square", brushSystem->getBrushType() == BrushType::BaseSquare)) {
+                brushSystem->setBrushType(BrushType::BaseSquare);
+            }
             ImGui::EndCombo();
         }
         if (ImGui::IsItemHovered()) {
@@ -592,123 +613,129 @@ void UIManager::renderLayersList() {
     static bool isRenamingLayer = false;
     static char renameBuffer[256] = "";
     static int renamingLayerIndex = -1;
-    
+
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
-    
+
+    // Get layers
     for (int i = canvas->getLayerCount() - 1; i >= 0; i--) {
         Layer* layer = canvas->getLayer(i);
         if (!layer) continue;
-        
-        ImGui::PushID(i);
-        
-        bool isSelected = (i == canvas->getActiveLayerIndex());
-        bool visible = layer->getVisibility();
-        float opacity = layer->getOpacity();
-        bool isClicked = false;
-        bool isOverlapping = false;
-        
-        // Layer row
-        ImGui::PushStyleColor(ImGuiCol_Button, 
-            isSelected ? ImVec4(0.22f, 0.24f, 0.29f, 1.0f) : ImVec4(0.18f, 0.20f, 0.25f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.27f, 0.32f, 1.0f));
-        
-        ImGui::BeginGroup();
-        
-        // Layer row button
-        if (ImGui::Button("##LayerRow", ImVec2(ImGui::GetContentRegionAvail().x, 40))) {
-            isClicked = true;
-        }
-        
-        // Drag and drop
-        ImGui::SameLine(8);
-        ImGui::SetItemAllowOverlap();
-        
-        // Visible button
-        if (visible) {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
-        }
-        if (ImGui::Button(ICON_FA_EYE "##Visible")) {
-            isOverlapping = true;
-        }
-        if (ImGui::IsItemClicked()) {
-            layer->setVisibility(!visible);
-        }
-        ImGui::PopStyleColor();
-        
-        ImGui::SameLine();
-        
-        // Layer name input
-        if (renamingLayerIndex == i) {
-            ImGui::SetNextItemWidth(150);
-            if (ImGui::InputText("##RenameLayer", renameBuffer, sizeof(renameBuffer), 
-                               ImGuiInputTextFlags_EnterReturnsTrue)) {
-                layer->setName(renameBuffer);
-                renamingLayerIndex = -1;
-            }
-            if (!ImGui::IsItemActive() && (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1))) {
-                renamingLayerIndex = -1;
-            }
-        } else {
-            if (ImGui::Button(layer->getName().c_str(), ImVec2(150, 0))) {
-                // isOverlapping = true;
-            }
-            if (ImGui::IsItemClicked()) {
-                renamingLayerIndex = i;
-                strncpy(renameBuffer, layer->getName().c_str(), sizeof(renameBuffer));
-            }
-        }
-        
-        // Opacity input
-        float rightOffset = ImGui::GetContentRegionAvail().x - 100;
-        ImGui::SameLine(rightOffset);
-        
-        // Opacity slider
-        ImGui::SetNextItemWidth(50);
-        int opacityPercent = static_cast<int>(opacity * 100);
-        if (ImGui::DragInt("##Opacity", &opacityPercent, 1, 0, 100)) {
-            layer->setOpacity(opacityPercent / 100.0f);
-        }
-        
-        ImGui::SameLine();
-        
-        // Delete button
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.1f, 0.1f, 0.7f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.1f, 0.1f, 0.9f));
-        if (ImGui::Button(ICON_FA_TRASH "##Delete")) {
-            isOverlapping = true;
-        }
-        if (ImGui::IsItemClicked()) {
-            canvas->removeLayer(i);
-        }
-        ImGui::PopStyleColor(2);
 
-        if (isClicked && !isOverlapping) {
-            canvas->setActiveLayer(i);
+        bool isSelected = (i == canvas->getActiveLayerIndex());
+        ImGui::PushID(i);
+
+        // Background color
+        if (isSelected) {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.274f, 0.341f, 0.455f, 1.00f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.223f, 0.255f, 0.318f, 1.00f));
         }
-        
-        ImGui::EndGroup();
-        
-        // Drag and drop
+
+        ImGui::PushStyleColor(ImGuiCol_Button, 
+            isSelected ? ImVec4(0.274f, 0.341f, 0.455f, 1.00f) : ImVec4(0.223f, 0.255f, 0.318f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, 
+            isSelected ? ImVec4(0.274f, 0.341f, 0.455f, 1.00f) : ImVec4(0.223f, 0.255f, 0.318f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, 
+            isSelected ? ImVec4(0.274f, 0.341f, 0.455f, 1.00f) : ImVec4(0.223f, 0.255f, 0.318f, 1.00f));
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+        ImGui::BeginChild("LayerRow", ImVec2(ImGui::GetContentRegionAvail().x, 40), false);
+
+        // Drag handle
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_GRIP_LINES "##DragHandle")) {
+            // Do nothing
+        }
+        // Set drag source
         if (ImGui::BeginDragDropSource()) {
             ImGui::SetDragDropPayload("LAYER_ITEM", &i, sizeof(int));
             ImGui::TextUnformatted(layer->getName().c_str());
             ImGui::EndDragDropSource();
         }
+        // Set drag target
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LAYER_ITEM")) {
-                int sourceIndex = *(const int*)payload->Data;
-                canvas->moveLayer(sourceIndex, i);
+                int srcIndex = *(const int*)payload->Data;
+                canvas->moveLayer(srcIndex, i);
             }
             ImGui::EndDragDropTarget();
         }
-        
-        ImGui::PopStyleColor(2); // Button colors
+
+        if (ImGui::IsMouseClicked(0) && ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
+            // If not renaming any layer, set active layer
+            if (!ImGui::IsAnyItemHovered()) {
+                canvas->setActiveLayer(i);
+            }
+        }
+
+        ImGui::SameLine(40);
+
+        // Visible toggle
+        bool visible = layer->getVisibility();
+        if (visible) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.4f, 1.f));
+        }
+        if (ImGui::Button(ICON_FA_EYE "##Visible")) {
+            layer->setVisibility(!visible);
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+
+        // Rename layer
+        if (renamingLayerIndex == i) {
+            ImGui::SetNextItemWidth(150);
+            ImGuiInputTextFlags input_flags = 
+                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll;
+            if (ImGui::InputText("##RenameLayer", renameBuffer, sizeof(renameBuffer), input_flags)) {
+                if (strlen(renameBuffer) > 0) {
+                    layer->setName(renameBuffer, true);
+                }
+                renamingLayerIndex = -1;
+            }
+            if (ImGui::IsItemDeactivated()) {
+                if (strlen(renameBuffer) > 0) {
+                    layer->setName(renameBuffer, true);
+                }
+                renamingLayerIndex = -1;
+            }
+        } else {
+            if (ImGui::Button(layer->getName().c_str(), ImVec2(150, 0))) {
+                // Do nothing
+            }
+            // Rename layer on double click
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                renamingLayerIndex = i;
+                strncpy(renameBuffer, layer->getName().c_str(), sizeof(renameBuffer));
+            }
+        }
+
+        float offset = ImGui::GetContentRegionAvail().x - 96;
+        ImGui::SameLine(offset);
+
+        // Opacity slider
+        float opacity = layer->getOpacity();
+        int opacityInt = static_cast<int>(opacity * 100);
+        ImGui::SetNextItemWidth(50);
+        if (ImGui::DragInt("##Opacity", &opacityInt, 1, 0, 100)) {
+            layer->setOpacity(opacityInt / 100.f);
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_TRASH "##Delete")) {
+            canvas->removeLayer(i);
+        }
+
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+
         ImGui::PopID();
     }
-    
+
     ImGui::PopStyleVar(2);
 }
 
@@ -774,6 +801,14 @@ void UIManager::renderCanvasArea(float x, float y, float width, float height) {
         // Store canvas display info for coordinate conversion
         canvasDisplayPos = finalPos;
         canvasDisplaySize = displaySize;
+    }
+
+    ImVec2 mousePos = ImGui::GetMousePos();
+    bool isOverCanvas = (mousePos.x >= finalPos.x && mousePos.x < finalPos.x + displaySize.x &&
+                        mousePos.y >= finalPos.y && mousePos.y < finalPos.y + displaySize.y);
+    
+    if (cursorManager && canvas) {
+        cursorManager->updateCursor(canvas->getTool(), isOverCanvas);
     }
 
     ImGui::End();
