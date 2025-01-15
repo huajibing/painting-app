@@ -63,6 +63,9 @@ bool Application::init() {
         return false;
     }
 
+    // Initialize file system
+    fileSystem = std::make_unique<FileSystem>(*canvas);
+
     // Initialize brush system
     brushSystem = std::make_unique<BrushSystem>(*canvas);
     brushSystem->setCommandManager(canvas->getCommandManager());
@@ -70,6 +73,7 @@ bool Application::init() {
     // Connect systems to UI manager
     uiManager->setCanvas(canvas.get());
     uiManager->setBrushSystem(brushSystem.get());
+    uiManager->setFileSystem(fileSystem.get());
 
     // Set window resize callback
     glfwSetWindowUserPointer(window, this);
@@ -84,25 +88,85 @@ bool Application::init() {
     // Setup keyboard shortcuts
     glfwSetKeyCallback(window, [](GLFWwindow* w, int key, int scancode, int action, int mods) {
         auto app = static_cast<Application*>(glfwGetWindowUserPointer(w));
+        if (!app || !app->uiManager) return;
+
         if (action == GLFW_PRESS) {
-            // Check for Ctrl+Z (Undo)
-            if (key == GLFW_KEY_Z && (mods & GLFW_MOD_CONTROL)) {
-                if (mods & GLFW_MOD_SHIFT) {
-                    // Ctrl+Shift+Z for Redo
-                    if (app->canvas && app->canvas->canRedo()) {
-                        app->canvas->redo();
-                    }
-                } else {
-                    // Ctrl+Z for Undo
-                    if (app->canvas && app->canvas->canUndo()) {
-                        app->canvas->undo();
-                    }
+            if (mods & GLFW_MOD_CONTROL) {
+                switch (key) {
+                    case GLFW_KEY_N:  // Ctrl+N
+                        app->uiManager->handleNewFile();
+                        break;
+                        
+                    case GLFW_KEY_O:  // Ctrl+O
+                        app->uiManager->showOpenDialog();
+                        break;
+                        
+                    case GLFW_KEY_S:  // Ctrl+S
+                        if (mods & GLFW_MOD_SHIFT) {
+                            app->uiManager->showSaveDialog();  // Ctrl+Shift+S
+                        } else {
+                            app->uiManager->handleSaveFile(false);  // Ctrl+S
+                        }
+                        break;
+                        
+                    case GLFW_KEY_Z:  // Ctrl+Z
+                        if (mods & GLFW_MOD_SHIFT) {
+                            if (app->canvas && app->canvas->canRedo()) {
+                                app->canvas->redo();  // Ctrl+Shift+Z
+                            }
+                        } else {
+                            if (app->canvas && app->canvas->canUndo()) {
+                                app->canvas->undo();  // Ctrl+Z
+                            }
+                        }
+                        break;
+                        
+                    case GLFW_KEY_Y:  // Ctrl+Y
+                        if (app->canvas && app->canvas->canRedo()) {
+                            app->canvas->redo();
+                        }
+                        break;
+
+                    case GLFW_KEY_C:  // Ctrl+C
+                        if (app->canvas) {
+                            auto selectionSystem = app->canvas->getSelectionSystem();
+                            if (selectionSystem) {
+                                selectionSystem->copySelection();
+                            }
+                        }
+                        break;
+
+                    case GLFW_KEY_X:  // Ctrl+X
+                        if (app->canvas) {
+                            auto selectionSystem = app->canvas->getSelectionSystem();
+                            if (selectionSystem) {
+                                selectionSystem->cutSelection();
+                            }
+                        }
+                        break;
+
+                    case GLFW_KEY_V:  // Ctrl+V
+                        if (app->canvas) {
+                            auto selectionSystem = app->canvas->getSelectionSystem();
+                            if (selectionSystem) {
+                                // Get current mouse position for paste location
+                                double xpos, ypos;
+                                glfwGetCursorPos(w, &xpos, &ypos);
+                                float canvasX, canvasY;
+                                if (app->uiManager->windowToCanvas(xpos, ypos, canvasX, canvasY)) {
+                                    selectionSystem->pasteSelection(canvasX, canvasY);
+                                }
+                            }
+                        }
+                        break;
                 }
             }
-            // Alternative Redo shortcut (Ctrl+Y)
-            else if (key == GLFW_KEY_Y && (mods & GLFW_MOD_CONTROL)) {
-                if (app->canvas && app->canvas->canRedo()) {
-                    app->canvas->redo();
+            else if (key == GLFW_KEY_DELETE) {  // Delete key (without Ctrl)
+                if (app->canvas) {
+                    auto selectionSystem = app->canvas->getSelectionSystem();
+                    if (selectionSystem && selectionSystem->hasSelection()) {
+                        selectionSystem->deleteSelection();
+                    }
                 }
             }
         }
@@ -153,40 +217,78 @@ void Application::handleEvents() {
     
     GLFWwindow* window = uiManager->getWindow();
     
-    // Check if mouse is over ImGui windows
+    // Get ImGui IO
     ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse && !io.MouseDown[ImGuiMouseButton_Left]) {
+    
+    // If ImGui wants to capture mouse input, don't handle canvas interactions
+    if (io.WantCaptureMouse) {
         return;
     }
 
-    static bool wasPressed = false;
+    // Get current mouse button state
     bool isPressed = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+    static bool wasPressed = false;
+    
+    // Get current cursor position
+    double xpos, ypos;
+    glfwGetCursorPos(window, &xpos, &ypos);
+    
+    // Convert window coordinates to canvas coordinates
+    float canvasX, canvasY;
+    bool isOverCanvas = uiManager->windowToCanvas(xpos, ypos, canvasX, canvasY);
 
-    // Mouse button just pressed (start new stroke)
-    if (isPressed && !wasPressed) {
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-        
-        float canvasX, canvasY;
-        if (uiManager->windowToCanvas(xpos, ypos, canvasX, canvasY) && 
-            canvas->getLayer(canvas->getActiveLayerIndex())) {
-            brushSystem->beginStroke();
-            brushSystem->draw(canvasX, canvasY);
+    // Only handle mouse events if we're over the canvas
+    if (isOverCanvas) {
+        switch (canvas->getTool()) {
+            case Tool::Selection:
+                canvas->handleSelectionInput(canvasX, canvasY, isPressed, wasPressed);
+                break;
+                
+            case Tool::Brush:
+                if (canvas->getLayer(canvas->getActiveLayerIndex())) {
+                    if (isPressed && !wasPressed) {
+                        brushSystem->beginStroke();
+                        brushSystem->draw(canvasX, canvasY);
+                    }
+                    else if (isPressed) {
+                        brushSystem->draw(canvasX, canvasY);
+                    }
+                    else if (!isPressed && wasPressed) {
+                        brushSystem->endStroke();
+                    }
+                }
+                break;
+
+            case Tool::Eraser:
+                if (canvas->getLayer(canvas->getActiveLayerIndex())) {
+                    if (isPressed && !wasPressed) {
+                        brushSystem->beginStroke();
+                        brushSystem->draw(canvasX, canvasY);
+                    }
+                    else if (isPressed) {
+                        brushSystem->draw(canvasX, canvasY);
+                    }
+                    else if (!isPressed && wasPressed) {
+                        brushSystem->endStroke();
+                    }
+                }
+                break;
+
+            default:
+                break;
         }
-    }
-    // Mouse button is being held
-    else if (isPressed) {
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-        
-        float canvasX, canvasY;
-        if (uiManager->windowToCanvas(xpos, ypos, canvasX, canvasY)) {
-            brushSystem->draw(canvasX, canvasY);
-        }
-    }
-    // Mouse button just released (end stroke)
+    } 
     else if (!isPressed && wasPressed) {
-        brushSystem->endStroke();
+        // End any ongoing operations when mouse released outside canvas
+        if (canvas->getTool() == Tool::Brush || canvas->getTool() == Tool::Eraser) {
+            brushSystem->endStroke();
+        }
+        else if (canvas->getTool() == Tool::Selection) {
+            SelectionSystem* selectionSystem = canvas->getSelectionSystem();
+            if (selectionSystem && selectionSystem->hasSelection()) {
+                selectionSystem->endSelection();
+            }
+        }
     }
 
     wasPressed = isPressed;

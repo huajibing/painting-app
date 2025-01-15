@@ -6,12 +6,14 @@
 #include <vector>
 #include "base_brush.hpp"
 #include "texture_brush.hpp"
+// #include "chinese_brush.hpp"
 
 enum class BrushType {
     BaseCircle,
     BaseSquare,
     TexturePencil,
     TextureAcrylic
+    // ChineseBrush
 };
 
 class BrushFactory {
@@ -32,6 +34,8 @@ public:
                 return std::make_shared<TextureBrush::PencilBrush>(framebuffer, texture, width, height);
             case BrushType::TextureAcrylic:
                 return std::make_shared<TextureBrush::AcrylicBrush>(framebuffer, texture, width, height);
+            // case BrushType::ChineseBrush:
+            //     return std::make_shared<ChineseBrush::ChineseBrushImpl>(framebuffer, texture, width, height);
             default:
                 return std::make_shared<BaseBrush::CircleBrush>(framebuffer, width, height);
         }

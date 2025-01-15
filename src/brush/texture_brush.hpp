@@ -192,5 +192,4 @@ namespace TextureBrush{
             minDistance = 0.0f;
         }
     };
-
 } // namespace TextureBrush

@@ -16,6 +16,11 @@ enum class BlendMode {
     Overlay
 };
 
+enum class StrokeMode {
+    Normal,
+    Erase
+};
+
 class Layer {
 public:
     Layer(int width, int height, const std::string& name = "New Layer", CommandManager* manager = nullptr);
@@ -47,7 +52,7 @@ public:
     unsigned int getTexture() const { return texture; }
     const std::string& getId() const { return id; }
     
-    void mergeStroke(unsigned int strokeTexture);
+    void mergeStroke(unsigned int strokeTexture, StrokeMode mode = StrokeMode::Normal);
     
     void resize(int width, int height);
 

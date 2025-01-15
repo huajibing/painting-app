@@ -126,7 +126,7 @@ void Layer::manualClear() {
     clear();
 }
 
-void Layer::mergeStroke(unsigned int strokeTexture) {
+void Layer::mergeStroke(unsigned int strokeTexture, StrokeMode mode) {
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
     glViewport(0, 0, width, height);
     
@@ -141,6 +141,9 @@ void Layer::mergeStroke(unsigned int strokeTexture) {
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, strokeTexture);
     glUniform1i(glGetUniformLocation(mergeShader->getProgram(), "strokeTexture"), 1);
+
+    glUniform1i(glGetUniformLocation(mergeShader->getProgram(), "strokeMode"), 
+                mode == StrokeMode::Erase ? 1 : 0);
     
     // Disable OpenGL blending
     glDisable(GL_BLEND);

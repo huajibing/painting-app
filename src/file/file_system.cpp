@@ -15,7 +15,7 @@ bool FileSystem::importImage(const std::string& path, bool asNewLayer) {
         return false;
     }
     
-    // 创建新图层或使用当前图层
+    // Target layer or new layer
     Layer* targetLayer;
     if (asNewLayer) {
         canvas.addLayer("Imported Image");
@@ -29,17 +29,24 @@ bool FileSystem::importImage(const std::string& path, bool asNewLayer) {
         return false;
     }
     
-    // 转换图像数据到浮点格式
-    std::vector<float> pixelData;
-    pixelData.reserve(width * height * 4);
+    // Convert pixel data to float
+    std::vector<float> pixelData(width * height * 4);
     
-    for (int i = 0; i < width * height * 4; ++i) {
-        pixelData.push_back(data[i] / 255.0f);
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int srcIndex = (y * width + x) * 4;
+            int dstIndex = ((height - 1 - y) * width + x) * 4;
+
+            pixelData[dstIndex + 0] = data[srcIndex + 0] / 255.0f;
+            pixelData[dstIndex + 1] = data[srcIndex + 1] / 255.0f;
+            pixelData[dstIndex + 2] = data[srcIndex + 2] / 255.0f;
+            pixelData[dstIndex + 3] = data[srcIndex + 3] / 255.0f;
+        }
     }
     
     stbi_image_free(data);
     
-    // 设置图层数据
+    // Set layer pixels
     PixelRect rect{0, 0, width, height};
     try {
         targetLayer->setPixels(rect, pixelData);
@@ -51,44 +58,83 @@ bool FileSystem::importImage(const std::string& path, bool asNewLayer) {
 }
 
 bool FileSystem::exportImage(const std::string& path, bool mergeVisible) {
-    // 获取需要导出的图层
-    Layer* layer = nullptr;
     if (mergeVisible) {
-        // TODO: 实现图层合并功能
-        // layer = canvas.mergeLayers();
-    } else {
-        layer = canvas.getLayer(canvas.getActiveLayerIndex());
-    }
-    
-    if (!layer) {
+        unsigned int textureID = canvas.getCompositeTexture();
+        int width = canvas.getWidth();
+        int height = canvas.getHeight();
+        
+        // Read pixel data from texture
+        std::vector<float> pixelData(width * height * 4);
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, pixelData.data());
+        
+        // Convert to 8-bit and flip image
+        std::vector<unsigned char> outputData(width * height * 4);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int srcIndex = ((height - 1 - y) * width + x) * 4;
+                int dstIndex = (y * width + x) * 4;
+                
+                float r = pixelData[srcIndex + 0];
+                float g = pixelData[srcIndex + 1];
+                float b = pixelData[srcIndex + 2];
+                float a = pixelData[srcIndex + 3];
+
+                if (a > 0) {
+                    r /= a;
+                    g /= a;
+                    b /= a;
+                }
+
+                outputData[dstIndex + 0] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, r * 255.0f)));
+                outputData[dstIndex + 1] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, g * 255.0f)));
+                outputData[dstIndex + 2] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, b * 255.0f)));
+                outputData[dstIndex + 3] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, a * 255.0f)));
+            }
+        }
+        
+        // Save image
+        std::string extension = path.substr(path.find_last_of(".") + 1);
+        if (extension == "png") {
+            return stbi_write_png(path.c_str(), width, height, 4, 
+                                outputData.data(), width * 4);
+        } else if (extension == "jpg" || extension == "jpeg") {
+            return stbi_write_jpg(path.c_str(), width, height, 4, 
+                                outputData.data(), 95);
+        }
         return false;
+    } else {
+        // Get active layer
+        Layer* layer = canvas.getLayer(canvas.getActiveLayerIndex());
+        if (!layer) return false;
+        
+        // Get pixel data
+        PixelRect rect{0, 0, canvas.getWidth(), canvas.getHeight()};
+        std::vector<float> pixelData = layer->getPixels(rect);
+        
+        // Convert to 8-bit
+        std::vector<unsigned char> outputData;
+        outputData.reserve(pixelData.size());
+        
+        for (float value : pixelData) {
+            outputData.push_back(static_cast<unsigned char>(value * 255.0f));
+        }
+        
+        // Save image
+        std::string extension = path.substr(path.find_last_of(".") + 1);
+        bool success = false;
+        
+        if (extension == "png") {
+            success = stbi_write_png(path.c_str(), canvas.getWidth(), canvas.getHeight(),
+                                4, outputData.data(), canvas.getWidth() * 4);
+            std::cout << "png" << std::endl;
+        } else if (extension == "jpg" || extension == "jpeg") {
+            success = stbi_write_jpg(path.c_str(), canvas.getWidth(), canvas.getHeight(),
+                                4, outputData.data(), 95);
+        }
+        
+        return success;
     }
-    
-    // 获取图层数据
-    PixelRect rect{0, 0, canvas.getWidth(), canvas.getHeight()};
-    std::vector<float> pixelData = layer->getPixels(rect);
-    
-    // 转换为8位格式
-    std::vector<unsigned char> outputData;
-    outputData.reserve(pixelData.size());
-    
-    for (float value : pixelData) {
-        outputData.push_back(static_cast<unsigned char>(value * 255.0f));
-    }
-    
-    // 保存图像
-    std::string extension = path.substr(path.find_last_of(".") + 1);
-    bool success = false;
-    
-    if (extension == "png") {
-        success = stbi_write_png(path.c_str(), canvas.getWidth(), canvas.getHeight(),
-                               4, outputData.data(), canvas.getWidth() * 4);
-    } else if (extension == "jpg" || extension == "jpeg") {
-        success = stbi_write_jpg(path.c_str(), canvas.getWidth(), canvas.getHeight(),
-                               4, outputData.data(), 95);
-    }
-    
-    return success;
 }
 
 bool FileSystem::saveProject(const std::string& path) {
@@ -97,7 +143,7 @@ bool FileSystem::saveProject(const std::string& path) {
         return false;
     }
     
-    // 写入文件头
+    // Write project header
     ProjectHeader header;
     header.magic[0] = 'P'; header.magic[1] = 'A';
     header.magic[2] = 'I'; header.magic[3] = 'N';
@@ -111,7 +157,7 @@ bool FileSystem::saveProject(const std::string& path) {
         return false;
     }
     
-    // 写入每个图层的信息和数据
+    // Save each layer
     for (size_t i = 0; i < canvas.getLayerCount(); ++i) {
         Layer* layer = canvas.getLayer(i);
         if (!layer) continue;
@@ -134,7 +180,7 @@ bool FileSystem::loadProject(const std::string& path) {
         return false;
     }
     
-    // 读取文件头
+    // Read project header
     ProjectHeader header;
     if (!readProjectHeader(file, header)) {
         return false;
@@ -144,10 +190,12 @@ bool FileSystem::loadProject(const std::string& path) {
         return false;
     }
     
-    // 清除现有图层
-    // TODO: 实现canvas.clear()
+    // Clear existing layers
+    for (size_t i = 0; i < canvas.getLayerCount(); ++i) {
+        canvas.removeLayer(i, false);
+    }
     
-    // 读取每个图层
+    // Set up layers
     for (uint32_t i = 0; i < header.numLayers; ++i) {
         LayerInfo layerInfo;
         if (!readLayerInfo(file, layerInfo)) {
@@ -158,19 +206,19 @@ bool FileSystem::loadProject(const std::string& path) {
             return false;
         }
         
-        // 创建新图层
+        // Add new layer
         canvas.addLayer(layerInfo.name);
         Layer* layer = canvas.getLayer(canvas.getLayerCount() - 1);
         if (!layer) {
             return false;
         }
         
-        // 设置图层属性
+        // Set layer properties
         layer->setOpacity(layerInfo.opacity);
         layer->setVisibility(layerInfo.visible);
         layer->setBlendMode(static_cast<BlendMode>(layerInfo.blendMode));
         
-        // 读取图层数据
+        // Read layer data
         if (!readLayerData(file, layer, layerInfo)) {
             return false;
         }
@@ -179,7 +227,6 @@ bool FileSystem::loadProject(const std::string& path) {
     return true;
 }
 
-// 项目文件辅助函数实现
 bool FileSystem::writeProjectHeader(std::ofstream& file, const ProjectHeader& header) {
     file.write(reinterpret_cast<const char*>(&header), sizeof(header));
     return file.good();
@@ -198,7 +245,7 @@ bool FileSystem::writeLayerInfo(std::ofstream& file, const Layer* layer) {
     info.opacity = layer->getOpacity();
     info.blendMode = static_cast<uint32_t>(layer->getBlendMode());
     info.visible = layer->getVisibility();
-    info.dataOffset = file.tellp();  // 当前文件位置作为数据偏移量
+    info.dataOffset = file.tellp();
     
     file.write(reinterpret_cast<const char*>(&info), sizeof(info));
     return file.good();
@@ -235,18 +282,15 @@ bool FileSystem::readLayerData(std::ifstream& file, Layer* layer, const LayerInf
 }
 
 bool FileSystem::validateProjectHeader(const ProjectHeader& header) {
-    // 检查魔数
     if (header.magic[0] != 'P' || header.magic[1] != 'A' ||
         header.magic[2] != 'I' || header.magic[3] != 'N') {
         return false;
     }
-    
-    // 检查版本号
+
     if (header.version != 1) {
         return false;
     }
-    
-    // 检查画布尺寸
+
     if (header.width == 0 || header.height == 0 ||
         header.width > 16384 || header.height > 16384) {
         return false;
@@ -256,19 +300,16 @@ bool FileSystem::validateProjectHeader(const ProjectHeader& header) {
 }
 
 bool FileSystem::validateLayerInfo(const LayerInfo& info) {
-    // 检查图层尺寸
     if (info.width == 0 || info.height == 0 ||
         info.width > 16384 || info.height > 16384) {
         return false;
     }
     
-    // 检查不透明度范围
     if (info.opacity < 0.0f || info.opacity > 1.0f) {
         return false;
     }
-    
-    // 检查混合模式
-    if (info.blendMode > 3) {  // 假设只有4种混合模式
+
+    if (info.blendMode > 3) {
         return false;
     }
     

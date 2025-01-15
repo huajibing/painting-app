@@ -1,5 +1,6 @@
 #include "ui_manager.hpp"
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <iostream>
@@ -23,7 +24,7 @@ bool UIManager::init() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     
-    window = glfwCreateWindow(1600, 1000, "Painting App", nullptr, nullptr);
+    window = glfwCreateWindow(1660, 1000, "Painting App", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         return false;
@@ -56,154 +57,674 @@ bool UIManager::init() {
 }
 
 void UIManager::render() {
-    // Get buffer size
-    int display_w, display_h;
-    glfwGetFramebufferSize(window, &display_w, &display_h);
-    glViewport(0, 0, display_w, display_h);
-    
-    // Clear the background
-    glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
     // Start ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-
+    
     // Get window size
     int width, height;
     glfwGetWindowSize(window, &width, &height);
-
-    // Calculate sidebar width
-    float sidebarWidth = sidebarVisible ? 300.0f : 0.0f;
-
-    // Main menu bar
-    if (ImGui::BeginMainMenuBar()) {
-        if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("New")) {}
-            if (ImGui::MenuItem("Open")) {}
-            if (ImGui::MenuItem("Save")) {}
-            ImGui::Separator();
-            if (ImGui::MenuItem("Exit")) {
-                glfwSetWindowShouldClose(window, true);
-            }
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Edit")) {
-            if (ImGui::MenuItem("Undo", "Ctrl+Z")) {canvas->undo();}
-            if (ImGui::MenuItem("Redo", "Ctrl+Y")) {canvas->redo();}
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Show Sidebar", NULL, &sidebarVisible);
-            ImGui::EndMenu();
-        }
-        ImGui::EndMainMenuBar();
-    }
-
-    // Sidebar
-    if (sidebarVisible) {
-        ImGui::SetNextWindowPos(ImVec2(0, ImGui::GetFrameHeight()));
-        ImGui::SetNextWindowSize(ImVec2(sidebarWidth, height - ImGui::GetFrameHeight()));
-        ImGui::Begin("Tools", nullptr, 
-            ImGuiWindowFlags_NoMove | 
-            ImGuiWindowFlags_NoResize | 
-            ImGuiWindowFlags_NoCollapse);
-
-        // Brush settings section
-        if (ImGui::CollapsingHeader("Brush Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-            // Color picker
-            ImGui::PushItemWidth(-1);
-            bool colorChanged = ImGui::ColorEdit3("#olor", brushColor);
-            ImGui::PopItemWidth();
-            ImGui::Text("Color");
-            
-            // Brush size and opacity sliders
-            ImGui::PushItemWidth(-1);
-            bool sizeChanged = ImGui::SliderFloat("Size", &brushSize, 1.0f, 100.0f, "%.0f px");
-            bool opacityChanged = ImGui::SliderFloat("Opacity", &brushOpacity, 0.0f, 1.0f, "%.2f");
-            ImGui::PopItemWidth();
-            
-            ImGui::Spacing();
-            ImGui::Spacing();
-            
-            // Update brush settings if any value changed
-            if (colorChanged || sizeChanged || opacityChanged) {
-                if (brushSystem) {
-                    Color color(brushColor[0], brushColor[1], brushColor[2], brushOpacity);
-                    brushSystem->updateBrushSettings(brushSize, color);
-                }
-            }
-        }
-
-        // Layers section
-        if (ImGui::CollapsingHeader("Layers", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(15, 8));
-            if (ImGui::Button("Add Layer", ImVec2(-1, 0))) {
-                if (canvas) {
-                    canvas->addLayer();
-                }
-            }
-            ImGui::PopStyleVar();
     
-            ImGui::Spacing();
+    // Constants
+    const float leftToolbarWidth = 100.0f;
+    const float rightPanelWidth = 340.0f;
+    const float menuBarHeight = 70.0f;
+    
+    // Main menu bar
+    renderMainMenuBar(menuBarHeight);
+    
+    // Left toolbar
+    renderLeftToolbar(leftToolbarWidth, menuBarHeight, height);
+    
+    // Right panel
+    renderRightPanel(width - rightPanelWidth, menuBarHeight, rightPanelWidth, height - menuBarHeight);
+    
+    // Canvas area
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(40, 40));
+    renderCanvasArea(leftToolbarWidth, menuBarHeight, 
+                    width - leftToolbarWidth - rightPanelWidth, 
+                    height - menuBarHeight);
+    ImGui::PopStyleVar();
 
-            // List of layers
-            ImGui::BeginChild("Layers", ImVec2(0, 250), true);
-            if (canvas) {
-                for (int i = canvas->getLayerCount() - 1; i >= 0; i--) {
-                    Layer* layer = canvas->getLayer(i);
-                    if (!layer) continue;
+    // Handle file dialogs
+    handleFileDialogs();
+    
+    // Render ImGui
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
 
-                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 8));
+void UIManager::cleanup() {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    
+    if (window) {
+        glfwDestroyWindow(window);
+    }
+}
 
-                    bool isActive = (i == canvas->getActiveLayerIndex());
-                    if (ImGui::Selectable(layer->getName().c_str(), isActive)) {
-                        canvas->setActiveLayer(i);
-                    }
+void UIManager::setupStyle() {
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImGuiIO& io = ImGui::GetIO();
+    
+    // Load custom font
+    io.Fonts->Clear();
 
-                    // Layer controls
-                    float controlWidth = 120.0f;
-                    ImGui::SameLine(ImGui::GetWindowWidth() - controlWidth);
-                    
-                    // Visibility toggle
-                    bool visible = layer->getVisibility();
-                    if (ImGui::Checkbox(("##visible" + std::to_string(i)).c_str(), &visible)) {
-                        layer->setVisibility(visible);
-                    }
+    static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+    ImFontConfig icons_config; 
+    icons_config.MergeMode = true; 
+    icons_config.PixelSnapH = true;
+    icons_config.GlyphOffset.y = 1.0f;
 
-                    // Opacity slider
-                    ImGui::SameLine();
-                    float opacity = layer->getOpacity();
-                    ImGui::SetNextItemWidth(60);
-                    if (ImGui::SliderFloat(("##opacity" + std::to_string(i)).c_str(), 
-                                         &opacity, 0.0f, 1.0f, "%.2f")) {
-                        layer->setOpacity(opacity);
-                    }
+    boldFont = io.Fonts->AddFontFromFileTTF("assets/fonts/OpenSans-Bold.ttf", 28.0f);
+    io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", 24.0f, &icons_config, icons_ranges);
+
+    regularFont = io.Fonts->AddFontFromFileTTF("assets/fonts/OpenSans-Regular.ttf", 28.0f);
+    io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", 24.0f, &icons_config, icons_ranges);
+    
+    largeRegularFont = io.Fonts->AddFontFromFileTTF("assets/fonts/OpenSans-Regular.ttf", 33.0f);
+    
+    largeBoldFont = io.Fonts->AddFontFromFileTTF("assets/fonts/OpenSans-Bold.ttf", 33.0f);
+    io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", 24.0f, &icons_config, icons_ranges);
+    
+    icons_config.MergeMode = false;
+    largeIconFont = io.Fonts->AddFontFromFileTTF("assets/fonts/fa-solid-900.ttf", 36.0f, &icons_config, icons_ranges);
+
+    io.Fonts->Build();
+    
+    // Colors
+    ImVec4* colors = style.Colors;
+    colors[ImGuiCol_WindowBg] = ImVec4(0.129f, 0.160f, 0.216f, 1.00f);
+    colors[ImGuiCol_ChildBg] = ImVec4(0.129f, 0.160f, 0.216f, 1.00f);
+    colors[ImGuiCol_PopupBg] = ImVec4(0.129f, 0.160f, 0.216f, 1.00f);
+    
+    // Headers
+    colors[ImGuiCol_Header] = ImVec4(0.129f, 0.160f, 0.216f, 1.00f);
+    colors[ImGuiCol_HeaderHovered] = ImVec4(0.274f, 0.341f, 0.455f, 1.00f);
+    colors[ImGuiCol_HeaderActive] = ImVec4(0.263f, 0.376f, 0.918f, 1.00f);
+    
+    // Buttons
+    colors[ImGuiCol_Button] = ImVec4(0.129f, 0.160f, 0.216f, 1.00f);
+    colors[ImGuiCol_ButtonHovered] = ImVec4(0.274f, 0.341f, 0.455f, 1.00f);
+    colors[ImGuiCol_ButtonActive] = ImVec4(0.263f, 0.376f, 0.918f, 1.00f);
+    
+    // Frame colors (for sliders, input fields etc)
+    colors[ImGuiCol_FrameBg] = ImVec4(0.223f, 0.255f, 0.318f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.274f, 0.341f, 0.455f, 1.00f);
+    colors[ImGuiCol_FrameBgActive] = ImVec4(0.263f, 0.376f, 0.918f, 1.00f);
+    
+    // Tabs
+    colors[ImGuiCol_Tab] = ImVec4(0.129f, 0.160f, 0.216f, 1.00f);
+    colors[ImGuiCol_TabHovered] = ImVec4(0.274f, 0.341f, 0.455f, 1.00f);
+    colors[ImGuiCol_TabActive] = ImVec4(0.263f, 0.376f, 0.918f, 1.00f);
+    
+    // Title
+    colors[ImGuiCol_TitleBg] = ImVec4(0.129f, 0.137f, 0.160f, 1.00f);
+    colors[ImGuiCol_TitleBgActive] = ImVec4(0.129f, 0.137f, 0.160f, 1.00f);
+    
+    // Text
+    colors[ImGuiCol_Text] = ImVec4(0.937f, 0.937f, 0.937f, 1.00f);
+    
+    // Slider
+    colors[ImGuiCol_SliderGrab] = ImVec4(0.267f, 0.616f, 0.967f, 1.00f);
+    colors[ImGuiCol_SliderGrabActive] = ImVec4(0.367f, 0.716f, 1.000f, 1.00f);
+    
+    // Separator
+    colors[ImGuiCol_Separator] = ImVec4(0.274f, 0.341f, 0.455f, 1.00f);
+    
+    // Style
+    style.WindowPadding = ImVec2(15, 15);
+    style.FramePadding = ImVec2(8, 6);
+    style.ItemSpacing = ImVec2(12, 8);
+    style.ItemInnerSpacing = ImVec2(8, 6);
+    style.WindowRounding = 0.0f;
+    style.ChildRounding = 4.0f;
+    style.FrameRounding = 8.0f;
+    style.PopupRounding = 4.0f;
+    style.ScrollbarRounding = 9.0f;
+    style.GrabRounding = 3.0f;
+    style.TabRounding = 4.0f;
+    
+    // Borders
+    style.WindowBorderSize = 0.0f;
+    style.ChildBorderSize = 1.0f;
+    style.PopupBorderSize = 1.0f;
+    style.FrameBorderSize = 0.0f;
+    style.TabBorderSize = 0.0f;
+}
+
+void UIManager::setBrushSystem(BrushSystem* bs) {
+    brushSystem = bs;
+}
+
+void UIManager::setCanvas(Canvas* c) {
+    canvas = c;
+}
+
+bool UIManager::shouldClose() const {
+    return glfwWindowShouldClose(window);
+}
+
+void UIManager::handleFileDialogs() {
+    // Open File Dialog
+    if (showOpenFileDialog) {
+        ImGui::OpenPopup("Open File");
+        showOpenFileDialog = false;
+    }
+    
+    if (ImGui::BeginPopupModal("Open File", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("File path:");
+        ImGui::InputText("##filepath", openFilePath, sizeof(openFilePath));
+        
+        if (ImGui::Button("Open", ImVec2(120, 0))) {
+            if (strlen(openFilePath) > 0) {
+                std::string ext = std::string(openFilePath);
+                ext = ext.substr(ext.find_last_of(".") + 1);
+                
+                if (ext == "png" || ext == "jpg" || ext == "jpeg") {
+                    fileSystem->importImage(openFilePath);
+                } else if (ext == "paint") {
+                    fileSystem->loadProject(openFilePath);
                 }
+                ImGui::CloseCurrentPopup();
             }
-            ImGui::EndChild();
         }
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        
+        ImGui::EndPopup();
+    }
+    
+    // Save File Dialog
+    if (showSaveFileDialog) {
+        ImGui::OpenPopup("Save File");
+        showSaveFileDialog = false;
+    }
+    
+    if (ImGui::BeginPopupModal("Save File", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("File path:");
+        ImGui::InputText("##filepath", saveFilePath, sizeof(saveFilePath));
+        
+        if (ImGui::Button("Save", ImVec2(120, 0))) {
+            if (strlen(saveFilePath) > 0) {
+                std::string ext = std::string(saveFilePath);
+                ext = ext.substr(ext.find_last_of(".") + 1);
+                
+                if (ext == "png" || ext == "jpg" || ext == "jpeg") {
+                    fileSystem->exportImage(saveFilePath);
+                } else if (ext == "paint") {
+                    fileSystem->saveProject(saveFilePath);
+                }
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        
+        ImGui::EndPopup();
+    }
+}
 
-        ImGui::End();
+void UIManager::handleNewFile() {
+    if (canvas) {
+        canvas->clear();
+
+        brushSize = 20.0f;
+        brushOpacity = 1.0f;
+        brushColor[0] = brushColor[1] = brushColor[2] = 0.0f;
+    }
+}
+
+void UIManager::handleOpenFile() {
+    if (strlen(openFilePath) > 0) {
+        std::string ext = std::string(openFilePath);
+        size_t dotPos = ext.find_last_of(".");
+        if (dotPos != std::string::npos) {
+            ext = ext.substr(dotPos + 1);
+            if (ext == "png" || ext == "jpg" || ext == "jpeg") {
+                fileSystem->importImage(openFilePath);
+            } else if (ext == "paint") {
+                fileSystem->loadProject(openFilePath);
+            } else {
+                std::cerr << "Unsupported file format: " << ext << std::endl;
+            }
+        }
+    }
+}
+
+void UIManager::handleSaveFile(bool saveAs) {
+    static std::string lastSavePath;
+    
+    if (!saveAs && !lastSavePath.empty()) {
+        fileSystem->saveProject(lastSavePath);
+        return;
     }
 
-    // Main canvas area
-    ImGui::SetNextWindowPos(ImVec2(sidebarWidth, ImGui::GetFrameHeight()));
-    ImGui::SetNextWindowSize(ImVec2(width - sidebarWidth, height - ImGui::GetFrameHeight()));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 30.0f));
+    if (strlen(saveFilePath) > 0) {
+        std::string path = saveFilePath;
+        std::string ext = path.substr(path.find_last_of(".") + 1);
+        
+        if (ext == "paint") {
+            fileSystem->saveProject(path);
+            lastSavePath = path;
+        } else if (ext == "png" || ext == "jpg" || ext == "jpeg") {
+            fileSystem->exportImage(path);
+        } else {
+            path += ".paint";
+            fileSystem->saveProject(path);
+            lastSavePath = path;
+        }
+    }
+}
+
+void UIManager::handleExportImage(const std::string& format) {
+    std::string defaultName = "untitled." + format;
+    strcpy(saveFilePath, defaultName.c_str());
+    showSaveFileDialog = true;
+}
+
+void UIManager::renderMainMenuBar(float height) {
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, height));
+    
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 10));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(15, 0));
+    
+    if (ImGui::Begin("##MainMenuBar", nullptr, 
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | 
+        ImGuiWindowFlags_NoScrollWithMouse)) {
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
+        
+        // Buttons
+        ImVec2 buttonSize_1(120.0f, 50.0f);
+        if (ImGui::Button(ICON_FA_PLUS "   New", buttonSize_1)) {
+            handleNewFile();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::SetItemTooltip("New (Ctrl+N)");
+
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_FOLDER_OPEN "   Open", buttonSize_1)) {
+            showOpenDialog();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::SetItemTooltip("Open (Ctrl+O)");
+        
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_SAVE "   Save", buttonSize_1)) {
+            handleSaveFile(false);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::SetItemTooltip("Save (Ctrl+S)");
+        
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        
+        // Undo/Redo buttons
+        ImVec2 buttonSize_2(50.0f, 50.0f);
+        ImGui::BeginDisabled(!canvas || !canvas->canUndo());
+        if (ImGui::Button(ICON_FA_UNDO "##Undo", buttonSize_2)) {
+            canvas->undo();
+        }
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::SetItemTooltip("Undo (Ctrl+Z)");
+        
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!canvas || !canvas->canRedo());
+        if (ImGui::Button(ICON_FA_REDO "##Redo", buttonSize_2)) {
+            canvas->redo();
+        }
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::SetItemTooltip("Redo (Ctrl+Y)");
+
+        ImGui::PopStyleVar();
+    }
+    ImGui::End();
+    
+    ImGui::PopStyleVar(2);
+}
+
+void UIManager::renderLeftToolbar(float width, float yOffset, float height) {
+    ImGui::SetNextWindowPos(ImVec2(0, yOffset));
+    ImGui::SetNextWindowSize(ImVec2(width, height - yOffset));
+    
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 20));
+    
+    if (ImGui::Begin("##LeftToolbar", nullptr, 
+        ImGuiWindowFlags_NoTitleBar | 
+        ImGuiWindowFlags_NoResize | 
+        ImGuiWindowFlags_NoMove | 
+        ImGuiWindowFlags_NoScrollbar)) {
+        
+        // Tool buttons
+        const float buttonSize = 70.0f;
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 8));
+        ImGui::PushFont(largeIconFont);
+        
+        // Brush tool
+        if (canvas->getTool() == Tool::Brush) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.263f, 0.376f, 0.918f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.263f, 0.376f, 0.918f, 1.00f));
+        }
+        if (ImGui::Button(ICON_FA_PENCIL, ImVec2(buttonSize, buttonSize))) {
+            canvas->setTool(Tool::Brush);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.129f, 0.160f, 0.216f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.274f, 0.341f, 0.455f, 1.00f));
+            
+        // Eraser tool
+        if (canvas->getTool() == Tool::Eraser) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.263f, 0.376f, 0.918f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.263f, 0.376f, 0.918f, 1.00f));
+        }
+        if (ImGui::Button(ICON_FA_ERASER, ImVec2(buttonSize, buttonSize))) {
+            canvas->setTool(Tool::Eraser);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.129f, 0.160f, 0.216f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.274f, 0.341f, 0.455f, 1.00f));
+
+        // Pointer tool
+        if (canvas->getTool() == Tool::Pointer) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.263f, 0.376f, 0.918f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.263f, 0.376f, 0.918f, 1.00f));
+        }
+        if (ImGui::Button(ICON_FA_ARROW_POINTER, ImVec2(buttonSize, buttonSize))) {
+            canvas->setTool(Tool::Pointer);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.129f, 0.160f, 0.216f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.274f, 0.341f, 0.455f, 1.00f));
+            
+        // Selection tool
+        if (canvas->getTool() == Tool::Selection) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.263f, 0.376f, 0.918f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.263f, 0.376f, 0.918f, 1.00f));
+        }
+        if (ImGui::Button(ICON_FA_CROP, ImVec2(buttonSize, buttonSize))) {
+            canvas->setTool(Tool::Selection);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+
+        ImGui::PopStyleColor(8);            
+        ImGui::PopFont();
+        ImGui::PopStyleVar();
+    }
+    ImGui::End();
+    
+    ImGui::PopStyleVar(2);
+}
+
+void UIManager::renderRightPanel(float x, float y, float width, float height) {
+    ImGui::SetNextWindowPos(ImVec2(x, y));
+    ImGui::SetNextWindowSize(ImVec2(width, height));
+
+    ImGui::PushFont(regularFont);
+    
+    if (ImGui::Begin("##RightPanel", nullptr, 
+        ImGuiWindowFlags_NoTitleBar | 
+        ImGuiWindowFlags_NoResize | 
+        ImGuiWindowFlags_NoMove)) {
+        
+        // Brush Type Section
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
+        ImGui::PushFont(largeBoldFont);
+        ImGui::TextUnformatted(ICON_FA_BRUSH "  Brush Type");
+        ImGui::PopFont();
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::BeginCombo("##BrushType", "Standard Pencil", ImGuiComboFlags_NoArrowButton)) {
+            if (ImGui::Selectable("Standard Pencil", true)) {}
+            if (ImGui::Selectable("Watercolor", false)) {}
+            if (ImGui::Selectable("Ink Pen", false)) {}
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::PopStyleVar();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        // Brush Settings Section
+        ImGui::PushFont(largeBoldFont);
+        ImGui::TextUnformatted(ICON_FA_GEAR "  Brush Settings");
+        ImGui::PopFont();
+        ImGui::Spacing();
+        // Color picker with custom layout
+        ImGui::TextUnformatted("Color");
+        ImGui::SameLine();
+        bool colorChanged = ImGui::ColorEdit3("##Color", brushColor, 
+            ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+        
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.274f, 0.341f, 0.455f, 1.00f));
+        
+        // Size slider
+        ImGui::TextUnformatted("Size");
+        ImGui::SetNextItemWidth(-1);
+        bool sizeChanged = ImGui::SliderFloat("##Size", &brushSize, 1.0f, 100.0f, "%.0f");
+        
+        // Opacity slider
+        ImGui::TextUnformatted("Opacity");
+        ImGui::SetNextItemWidth(-1);
+        bool opacityChanged = ImGui::SliderFloat("##Opacity", &brushOpacity, 0.0f, 1.0f, "%.2f");
+        
+        ImGui::PopStyleColor();
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Update brush settings if any value changed
+        if (colorChanged || sizeChanged || opacityChanged) {
+            if (brushSystem) {
+                Color color(brushColor[0], brushColor[1], brushColor[2], brushOpacity);
+                brushSystem->updateBrushSettings(brushSize, color);
+            }
+        }
+        
+        // Layers Section
+        ImGui::PushFont(largeBoldFont);
+        ImGui::TextUnformatted(ICON_FA_LAYER_GROUP "  Layers");
+        ImGui::PopFont();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.223f, 0.255f, 0.318f, 1.00f));
+        if (ImGui::Button(ICON_FA_PLUS "  Add Layer", ImVec2(-1, 50))) {
+            if (canvas) canvas->addLayer();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::PopStyleColor();
+        
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+        ImGui::BeginChild("LayersList", ImVec2(-1, -1), true);
+        renderLayersList();
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+    }
+    ImGui::End();
+    ImGui::PopFont();
+}
+
+void UIManager::renderLayersList() {
+    if (!canvas) return;
+    
+    static int draggedLayer = -1;
+    static bool isRenamingLayer = false;
+    static char renameBuffer[256] = "";
+    static int renamingLayerIndex = -1;
+    
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
+    
+    for (int i = canvas->getLayerCount() - 1; i >= 0; i--) {
+        Layer* layer = canvas->getLayer(i);
+        if (!layer) continue;
+        
+        ImGui::PushID(i);
+        
+        bool isSelected = (i == canvas->getActiveLayerIndex());
+        bool visible = layer->getVisibility();
+        float opacity = layer->getOpacity();
+        bool isClicked = false;
+        bool isOverlapping = false;
+        
+        // Layer row
+        ImGui::PushStyleColor(ImGuiCol_Button, 
+            isSelected ? ImVec4(0.22f, 0.24f, 0.29f, 1.0f) : ImVec4(0.18f, 0.20f, 0.25f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.27f, 0.32f, 1.0f));
+        
+        ImGui::BeginGroup();
+        
+        // Layer row button
+        if (ImGui::Button("##LayerRow", ImVec2(ImGui::GetContentRegionAvail().x, 40))) {
+            isClicked = true;
+        }
+        
+        // Drag and drop
+        ImGui::SameLine(8);
+        ImGui::SetItemAllowOverlap();
+        
+        // Visible button
+        if (visible) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+        }
+        if (ImGui::Button(ICON_FA_EYE "##Visible")) {
+            isOverlapping = true;
+        }
+        if (ImGui::IsItemClicked()) {
+            layer->setVisibility(!visible);
+        }
+        ImGui::PopStyleColor();
+        
+        ImGui::SameLine();
+        
+        // Layer name input
+        if (renamingLayerIndex == i) {
+            ImGui::SetNextItemWidth(150);
+            if (ImGui::InputText("##RenameLayer", renameBuffer, sizeof(renameBuffer), 
+                               ImGuiInputTextFlags_EnterReturnsTrue)) {
+                layer->setName(renameBuffer);
+                renamingLayerIndex = -1;
+            }
+            if (!ImGui::IsItemActive() && (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1))) {
+                renamingLayerIndex = -1;
+            }
+        } else {
+            if (ImGui::Button(layer->getName().c_str(), ImVec2(150, 0))) {
+                // isOverlapping = true;
+            }
+            if (ImGui::IsItemClicked()) {
+                renamingLayerIndex = i;
+                strncpy(renameBuffer, layer->getName().c_str(), sizeof(renameBuffer));
+            }
+        }
+        
+        // Opacity input
+        float rightOffset = ImGui::GetContentRegionAvail().x - 100;
+        ImGui::SameLine(rightOffset);
+        
+        // Opacity slider
+        ImGui::SetNextItemWidth(50);
+        int opacityPercent = static_cast<int>(opacity * 100);
+        if (ImGui::DragInt("##Opacity", &opacityPercent, 1, 0, 100)) {
+            layer->setOpacity(opacityPercent / 100.0f);
+        }
+        
+        ImGui::SameLine();
+        
+        // Delete button
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.1f, 0.1f, 0.7f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.1f, 0.1f, 0.9f));
+        if (ImGui::Button(ICON_FA_TRASH "##Delete")) {
+            isOverlapping = true;
+        }
+        if (ImGui::IsItemClicked()) {
+            canvas->removeLayer(i);
+        }
+        ImGui::PopStyleColor(2);
+
+        if (isClicked && !isOverlapping) {
+            canvas->setActiveLayer(i);
+        }
+        
+        ImGui::EndGroup();
+        
+        // Drag and drop
+        if (ImGui::BeginDragDropSource()) {
+            ImGui::SetDragDropPayload("LAYER_ITEM", &i, sizeof(int));
+            ImGui::TextUnformatted(layer->getName().c_str());
+            ImGui::EndDragDropSource();
+        }
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("LAYER_ITEM")) {
+                int sourceIndex = *(const int*)payload->Data;
+                canvas->moveLayer(sourceIndex, i);
+            }
+            ImGui::EndDragDropTarget();
+        }
+        
+        ImGui::PopStyleColor(2); // Button colors
+        ImGui::PopID();
+    }
+    
+    ImGui::PopStyleVar(2);
+}
+
+void UIManager::renderCanvasArea(float x, float y, float width, float height) {
+    ImGui::SetNextWindowPos(ImVec2(x, y));
+    ImGui::SetNextWindowSize(ImVec2(width, height));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.22f, 0.25f, 0.32f, 1.0f));
     ImGui::Begin("Canvas", nullptr, 
         ImGuiWindowFlags_NoMove | 
         ImGuiWindowFlags_NoResize | 
         ImGuiWindowFlags_NoCollapse | 
         ImGuiWindowFlags_NoTitleBar |
         ImGuiWindowFlags_NoScrollbar | 
-        ImGuiWindowFlags_NoScrollWithMouse);
-
-    // Display FPS in the corner
-    ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() - 120, 10));
-    ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-
+        ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoMouseInputs);
+    
     // Get canvas area size and position
     ImVec2 canvasPos = ImGui::GetCursorScreenPos();
     ImVec2 canvasSize = ImGui::GetContentRegionAvail();
@@ -254,81 +775,7 @@ void UIManager::render() {
         canvasDisplayPos = finalPos;
         canvasDisplaySize = displaySize;
     }
+
     ImGui::End();
-
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-}
-
-void UIManager::cleanup() {
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-    
-    if (window) {
-        glfwDestroyWindow(window);
-    }
-}
-
-void UIManager::setupStyle() {
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImGuiIO& io = ImGui::GetIO();
-    io.Fonts->Clear();
-    io.Fonts->AddFontFromFileTTF("assets/fonts/OpenSans-Bold.ttf", 24.0f);
-    io.Fonts->Build();
-    
-    // Colors
-    // style.Colors[ImGuiCol_WindowBg] = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
-    // style.Colors[ImGuiCol_Header] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-    // style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
-    // style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
-    // style.Colors[ImGuiCol_Button] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-    // style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
-    // style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
-    style.Colors[ImGuiCol_Header] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
-    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.35f, 0.35f, 0.35f, 1.0f);
-    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-    style.Colors[ImGuiCol_Button] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
-    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.35f, 0.35f, 0.35f, 1.0f);
-    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.3f, 0.3f, 0.3f, 1.0f);
-    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
-    
-    // Rounding
-    style.WindowRounding = 4.0f;
-    style.FrameRounding = 4.0f;
-    style.PopupRounding = 4.0f;
-    
-    // Padding
-    style.WindowPadding = ImVec2(15.0f, 15.0f);
-    style.FramePadding = ImVec2(10.0f, 10.0f);
-    style.ItemSpacing = ImVec2(12.0f, 12.0f);
-    style.ItemInnerSpacing = ImVec2(10.0f, 10.0f);
-    
-    // Sizing
-    style.TouchExtraPadding = ImVec2(0.0f, 0.0f);
-    style.IndentSpacing = 25.0f;
-    style.ScrollbarSize = 22.0f;
-    style.GrabMinSize = 22.0f;
-    
-    // Window sizing
-    style.WindowMinSize = ImVec2(250.0f, 120.0f);
-    
-    // Borders
-    style.FrameBorderSize = 1.0f;
-    style.WindowBorderSize = 1.0f;
-}
-
-void UIManager::setBrushSystem(BrushSystem* bs) {
-    brushSystem = bs;
-}
-
-void UIManager::setCanvas(Canvas* c) {
-    canvas = c;
-}
-
-bool UIManager::shouldClose() const {
-    return glfwWindowShouldClose(window);
+    ImGui::PopStyleColor();
 }

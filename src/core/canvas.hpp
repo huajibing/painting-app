@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <imgui.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include "../selection/selection_system.hpp"
 #include "../utils/color.hpp"
 #include "../utils/shader.hpp"
 #include "layer.hpp"
@@ -14,6 +15,13 @@ struct CanvasTransform {
     ImVec2 displaySize;
     int textureWidth;
     int textureHeight;
+};
+
+enum class Tool {
+    Pointer,
+    Brush,
+    Eraser,
+    Selection
 };
 
 class Canvas {
@@ -59,6 +67,14 @@ public:
 
     // Composite texture access
     unsigned int getCompositeTexture() const;
+
+    // Tool
+    void setTool(Tool tool) { currentTool = tool; };
+    Tool getTool() const { return currentTool; }
+
+    // Selection
+    SelectionSystem* getSelectionSystem() { return selectionSystem.get(); }
+    void handleSelectionInput(float x, float y, bool isPressed, bool wasPressed);
     
 private:
     void setupQuad();
@@ -90,6 +106,11 @@ private:
     // Command system
     std::unique_ptr<CommandManager> commandManager;
 
+    // Selection
+    std::unique_ptr<SelectionSystem> selectionSystem;
+
     unsigned int currentStrokeTexture;
     bool isStroking;
+
+    Tool currentTool;
 };

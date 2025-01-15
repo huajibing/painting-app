@@ -22,12 +22,27 @@ namespace Shaders {
         out vec4 FragColor;
         
         in vec2 TexCoord;
-        uniform sampler2D canvasTexture;
+        uniform sampler2D layerTexture;
+        uniform sampler2D compositeTexture;
         uniform float layerOpacity;
+        uniform int previewMode;  // 0 for normal, 1 for erase
         
         void main() {
-            vec4 texColor = texture(canvasTexture, TexCoord);
-            FragColor = vec4(texColor.rgb, texColor.a * layerOpacity);
+            vec4 layerColor = texture(layerTexture, TexCoord);
+            vec4 compositeColor = texture(compositeTexture, TexCoord);
+            
+            if (previewMode == 1) {
+                // Erase mode
+                float eraseStrength = layerColor.a * layerOpacity;
+                float finalAlpha = max(0.0, compositeColor.a * (1.0 - eraseStrength));
+                FragColor = vec4(compositeColor.rgb, finalAlpha);
+            } else {
+                // Normal mode
+                vec3 finalRGB = layerColor.rgb * layerColor.a * layerOpacity + 
+                               compositeColor.rgb * compositeColor.a * (1.0 - layerColor.a * layerOpacity);
+                float finalAlpha = layerColor.a * layerOpacity + compositeColor.a * (1.0 - layerColor.a * layerOpacity);
+                FragColor = vec4(finalRGB / max(finalAlpha, 0.01), finalAlpha);
+            }
         }
     )";
 
@@ -87,15 +102,23 @@ namespace Shaders {
         in vec2 TexCoord;
         uniform sampler2D layerTexture;
         uniform sampler2D strokeTexture;
+        uniform int strokeMode; // 0 for normal, 1 for erase
         
         void main() {
             vec4 layerColor = texture(layerTexture, TexCoord);
             vec4 strokeColor = texture(strokeTexture, TexCoord);
             
-            vec3 finalRGB = strokeColor.rgb * strokeColor.a + layerColor.rgb * layerColor.a * (1.0 - strokeColor.a);
-            float finalAlpha = layerColor.a + (1.0 - layerColor.a) * strokeColor.a;
-            
-            FragColor = vec4(finalRGB / max(finalAlpha, 0.01), finalAlpha);
+            if (strokeMode == 1) { // Erase mode
+                float eraseStrength = strokeColor.a;
+                float finalAlpha = max(0.0, layerColor.a * (1.0 - eraseStrength));
+                FragColor = vec4(layerColor.rgb, finalAlpha);
+            }
+            else { // Normal mode
+                vec3 finalRGB = strokeColor.rgb * strokeColor.a + 
+                               layerColor.rgb * layerColor.a * (1.0 - strokeColor.a);
+                float finalAlpha = strokeColor.a + layerColor.a * (1.0 - strokeColor.a);
+                FragColor = vec4(finalRGB / max(finalAlpha, 0.01), finalAlpha);
+            }
         }
     )";
 }

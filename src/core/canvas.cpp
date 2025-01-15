@@ -44,6 +44,16 @@ bool Canvas::init() {
                 return false;
             }
         }
+
+        // Set tool to brush
+        setTool(Tool::Brush);
+
+        // Initialize selection system
+        selectionSystem = std::make_unique<SelectionSystem>(*this);
+        if (!selectionSystem->init()) {
+            std::cerr << "Failed to initialize selection system" << std::endl;
+            return false;
+        }
         
         return true;
     } catch (const std::exception& e) {
@@ -126,11 +136,7 @@ void Canvas::render() {
     glUniformMatrix4fv(glGetUniformLocation(shader->getProgram(), "projection"), 
                        1, GL_FALSE, &projection[0][0]);
     
-    // Setup blending for layer compositing
-    glEnable(GL_BLEND);
-    glBlendEquation(GL_FUNC_ADD);
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
-                        GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_BLEND);
     
     // Render each visible layer from bottom to top
     glBindVertexArray(VAO);
@@ -140,8 +146,15 @@ void Canvas::render() {
             glUniform1f(glGetUniformLocation(shader->getProgram(), "layerOpacity"), 
                        layer->getOpacity());
 
+            glUniform1i(glGetUniformLocation(shader->getProgram(), "previewMode"), 0);
+
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, layer->getTexture());
+            glUniform1i(glGetUniformLocation(shader->getProgram(), "layerTexture"), 0);
+
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, compositeTexture);
+            glUniform1i(glGetUniformLocation(shader->getProgram(), "compositeTexture"), 1);
             
             glBindVertexArray(VAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -149,14 +162,31 @@ void Canvas::render() {
             if (i == activeLayerIndex && isStroking && currentStrokeTexture) {
                 glUniform1f(glGetUniformLocation(shader->getProgram(), "layerOpacity"), 
                             layer->getOpacity());
+
+                glUniform1i(glGetUniformLocation(shader->getProgram(), "previewMode"), 
+                           currentTool == Tool::Eraser ? 1 : 0);
                 
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, currentStrokeTexture);
+                glUniform1i(glGetUniformLocation(shader->getProgram(), "layerTexture"), 0);
+
+                glActiveTexture(GL_TEXTURE1);
+                if (currentTool == Tool::Eraser) {
+                    glBindTexture(GL_TEXTURE_2D, layer->getTexture());
+                } else {
+                    glBindTexture(GL_TEXTURE_2D, compositeTexture);
+                }
+                glUniform1i(glGetUniformLocation(shader->getProgram(), "compositeTexture"), 1);
                 
                 glBindVertexArray(VAO);
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             }
         }
+    }
+
+    // Render selection overlay if we're in selection mode
+    if (currentTool == Tool::Selection && selectionSystem) {
+        selectionSystem->render();
     }
     
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -164,6 +194,34 @@ void Canvas::render() {
 
 unsigned int Canvas::getCompositeTexture() const {
     return compositeTexture;
+}
+
+void Canvas::handleSelectionInput(float x, float y, bool isPressed, bool wasPressed) {
+    if (!selectionSystem) return;
+
+    if (currentTool != Tool::Selection) {
+        // If we're not in selection mode and have a selection, clear it
+        if (selectionSystem->hasSelection()) {
+            selectionSystem->deleteSelection();
+        }
+        return;
+    }
+
+    // Handle mouse input for selection
+    if (isPressed && !wasPressed) {
+        // Mouse just pressed - start selection
+        std::cout << "Begin selection" << std::endl;
+        selectionSystem->beginSelection(x, y);
+    }
+    else if (isPressed) {
+        // Mouse being held - update selection
+        selectionSystem->updateSelection(x, y);
+    }
+    else if (!isPressed && wasPressed) {
+        // Mouse released - finish selection
+        std::cout << "End selection" << std::endl;
+        selectionSystem->endSelection();
+    }
 }
 
 void Canvas::addLayer(const std::string& name, bool addToCommandStack) {

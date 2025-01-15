@@ -29,7 +29,9 @@ void BrushSystem::endStroke() {
 
             Layer* activeLayer = canvas.getLayer(canvas.getActiveLayerIndex());
             if (activeLayer) {
-                activeLayer->mergeStroke(strokeBuffer->getTexture());
+                StrokeMode mode = canvas.getTool() == Tool::Eraser ? 
+                                 StrokeMode::Erase : StrokeMode::Normal;
+                activeLayer->mergeStroke(strokeBuffer->getTexture(), mode);
             }
             
             isStroking = false;

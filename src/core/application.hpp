@@ -18,5 +18,6 @@ private:
     std::unique_ptr<Canvas> canvas;
     std::unique_ptr<UIManager> uiManager;
     std::unique_ptr<BrushSystem> brushSystem;
+    std::unique_ptr<FileSystem> fileSystem; 
     bool shouldClose;
 };
