@@ -210,7 +210,6 @@ void Canvas::handleSelectionInput(float x, float y, bool isPressed, bool wasPres
     // Handle mouse input for selection
     if (isPressed && !wasPressed) {
         // Mouse just pressed - start selection
-        std::cout << "Begin selection" << std::endl;
         selectionSystem->beginSelection(x, y);
     }
     else if (isPressed) {
@@ -219,7 +218,6 @@ void Canvas::handleSelectionInput(float x, float y, bool isPressed, bool wasPres
     }
     else if (!isPressed && wasPressed) {
         // Mouse released - finish selection
-        std::cout << "End selection" << std::endl;
         selectionSystem->endSelection();
     }
 }

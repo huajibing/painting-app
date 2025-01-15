@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <nfd.hpp>
 #include "canvas.hpp"
 #include "../ui/ui_manager.hpp"
 #include "../brush/brush_system.hpp"

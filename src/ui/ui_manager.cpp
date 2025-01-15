@@ -88,9 +88,6 @@ void UIManager::render() {
                     width - leftToolbarWidth - rightPanelWidth, 
                     height - menuBarHeight);
     ImGui::PopStyleVar();
-
-    // Handle file dialogs
-    handleFileDialogs();
     
     // Render ImGui
     ImGui::Render();
@@ -209,129 +206,7 @@ bool UIManager::shouldClose() const {
     return glfwWindowShouldClose(window);
 }
 
-void UIManager::handleFileDialogs() {
-    // Open File Dialog
-    if (showOpenFileDialog) {
-        ImGui::OpenPopup("Open File");
-        showOpenFileDialog = false;
-    }
-    
-    if (ImGui::BeginPopupModal("Open File", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("File path:");
-        ImGui::InputText("##filepath", openFilePath, sizeof(openFilePath));
-        
-        if (ImGui::Button("Open", ImVec2(120, 0))) {
-            if (strlen(openFilePath) > 0) {
-                std::string ext = std::string(openFilePath);
-                ext = ext.substr(ext.find_last_of(".") + 1);
-                
-                if (ext == "png" || ext == "jpg" || ext == "jpeg") {
-                    fileSystem->importImage(openFilePath);
-                } else if (ext == "paint") {
-                    fileSystem->loadProject(openFilePath);
-                }
-                ImGui::CloseCurrentPopup();
-            }
-        }
-        
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-            ImGui::CloseCurrentPopup();
-        }
-        
-        ImGui::EndPopup();
-    }
-    
-    // Save File Dialog
-    if (showSaveFileDialog) {
-        ImGui::OpenPopup("Save File");
-        showSaveFileDialog = false;
-    }
-    
-    if (ImGui::BeginPopupModal("Save File", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("File path:");
-        ImGui::InputText("##filepath", saveFilePath, sizeof(saveFilePath));
-        
-        if (ImGui::Button("Save", ImVec2(120, 0))) {
-            if (strlen(saveFilePath) > 0) {
-                std::string ext = std::string(saveFilePath);
-                ext = ext.substr(ext.find_last_of(".") + 1);
-                
-                if (ext == "png" || ext == "jpg" || ext == "jpeg") {
-                    fileSystem->exportImage(saveFilePath);
-                } else if (ext == "paint") {
-                    fileSystem->saveProject(saveFilePath);
-                }
-                ImGui::CloseCurrentPopup();
-            }
-        }
-        
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-            ImGui::CloseCurrentPopup();
-        }
-        
-        ImGui::EndPopup();
-    }
-}
 
-void UIManager::handleNewFile() {
-    if (canvas) {
-        canvas->clear();
-
-        brushSize = 20.0f;
-        brushOpacity = 1.0f;
-        brushColor[0] = brushColor[1] = brushColor[2] = 0.0f;
-    }
-}
-
-void UIManager::handleOpenFile() {
-    if (strlen(openFilePath) > 0) {
-        std::string ext = std::string(openFilePath);
-        size_t dotPos = ext.find_last_of(".");
-        if (dotPos != std::string::npos) {
-            ext = ext.substr(dotPos + 1);
-            if (ext == "png" || ext == "jpg" || ext == "jpeg") {
-                fileSystem->importImage(openFilePath);
-            } else if (ext == "paint") {
-                fileSystem->loadProject(openFilePath);
-            } else {
-                std::cerr << "Unsupported file format: " << ext << std::endl;
-            }
-        }
-    }
-}
-
-void UIManager::handleSaveFile(bool saveAs) {
-    static std::string lastSavePath;
-    
-    if (!saveAs && !lastSavePath.empty()) {
-        fileSystem->saveProject(lastSavePath);
-        return;
-    }
-
-    if (strlen(saveFilePath) > 0) {
-        std::string path = saveFilePath;
-        std::string ext = path.substr(path.find_last_of(".") + 1);
-        
-        if (ext == "paint") {
-            fileSystem->saveProject(path);
-            lastSavePath = path;
-        } else if (ext == "png" || ext == "jpg" || ext == "jpeg") {
-            fileSystem->exportImage(path);
-        } else {
-            path += ".paint";
-            fileSystem->saveProject(path);
-            lastSavePath = path;
-        }
-    }
-}
-
-void UIManager::handleExportImage(const std::string& format) {
-    std::string defaultName = "untitled." + format;
-    strcpy(saveFilePath, defaultName.c_str());
-    showSaveFileDialog = true;
-}
 
 void UIManager::renderMainMenuBar(float height) {
     ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -348,7 +223,7 @@ void UIManager::renderMainMenuBar(float height) {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 10.0f);
         
         // Buttons
-        ImVec2 buttonSize_1(120.0f, 50.0f);
+        ImVec2 buttonSize_1(140.0f, 50.0f);
         if (ImGui::Button(ICON_FA_PLUS "   New", buttonSize_1)) {
             handleNewFile();
         }
@@ -368,12 +243,21 @@ void UIManager::renderMainMenuBar(float height) {
         
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_SAVE "   Save", buttonSize_1)) {
-            handleSaveFile(false);
+            showSaveDialog();
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         }
         ImGui::SetItemTooltip("Save (Ctrl+S)");
+
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_FILE_EXPORT "   Export", buttonSize_1)) {
+            showExportDialog("png");
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::SetItemTooltip("Export (Ctrl+E)");
         
         ImGui::SameLine();
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
@@ -645,7 +529,7 @@ void UIManager::renderLayersList() {
         // Drag handle
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_GRIP_LINES "##DragHandle")) {
-            // Do nothing
+            canvas->setActiveLayer(i);
         }
         // Set drag source
         if (ImGui::BeginDragDropSource()) {
@@ -813,4 +697,110 @@ void UIManager::renderCanvasArea(float x, float y, float width, float height) {
 
     ImGui::End();
     ImGui::PopStyleColor();
+}
+
+void UIManager::showOpenDialog() {
+    NFD::UniquePath outPath;
+    nfdfilteritem_t filterItem[3] = {
+        { "Project Files", "paint" },
+        { "Image Files", "png,jpg,jpeg" },
+        { "All Files", "*" }
+    };
+    
+    nfdresult_t result = NFD::OpenDialog(outPath, filterItem, 3);
+    if (result == NFD_OKAY) {
+        std::string path = outPath.get();
+        std::string ext = getFileExtension(path);
+        
+        try {
+            if (ext == "png" || ext == "jpg" || ext == "jpeg") {
+                fileSystem->importImage(path);
+            } else if (ext == "paint") {
+                fileSystem->loadProject(path);
+            }
+        } catch (const std::exception& e) {
+            // TODO: Show error dialog
+            std::cerr << "Failed to open file: " << e.what() << std::endl;
+        }
+    } else if (result == NFD_ERROR) {
+        std::cerr << "Error opening file dialog: " << NFD::GetError() << std::endl;
+    }
+}
+
+void UIManager::showSaveDialog() {
+    NFD::UniquePath outPath;
+    nfdfilteritem_t filterItem[2] = {
+        { "Project Files", "paint" },
+        { "All Files", "*" }
+    };
+    
+    nfdresult_t result = NFD::SaveDialog(outPath, filterItem, 2, nullptr, "untitled.paint");
+    if (result == NFD_OKAY) {
+        std::string path = outPath.get();
+        if (addDefaultExtension(path, "paint")) {
+            try {
+                fileSystem->saveProject(path);
+            } catch (const std::exception& e) {
+                // TODO: Show error dialog
+                std::cerr << "Failed to save file: " << e.what() << std::endl;
+            }
+        }
+    } else if (result == NFD_ERROR) {
+        std::cerr << "Error opening save dialog: " << NFD::GetError() << std::endl;
+    }
+}
+
+void UIManager::handleExportImage(const std::string& format) {
+    showExportDialog(format);
+}
+
+void UIManager::showExportDialog(const std::string& defaultFormat) {
+    NFD::UniquePath outPath;
+    nfdfilteritem_t filterItem[2] = {
+        { "Image Files", defaultFormat.c_str() },
+        { "All Files", "*" }
+    };
+    
+    std::string defaultName = "untitled." + defaultFormat;
+    nfdresult_t result = NFD::SaveDialog(outPath, filterItem, 2, nullptr, defaultName.c_str());
+    
+    if (result == NFD_OKAY) {
+        std::string path = outPath.get();
+        if (addDefaultExtension(path, defaultFormat)) {
+            try {
+                fileSystem->exportImage(path);
+            } catch (const std::exception& e) {
+                // TODO: Show error dialog
+                std::cerr << "Failed to export image: " << e.what() << std::endl;
+            }
+        }
+    } else if (result == NFD_ERROR) {
+        std::cerr << "Error opening export dialog: " << NFD::GetError() << std::endl;
+    }
+}
+
+std::string UIManager::getFileExtension(const std::string& path) {
+    size_t dotPos = path.find_last_of(".");
+    if (dotPos != std::string::npos) {
+        return path.substr(dotPos + 1);
+    }
+    return "";
+}
+
+bool UIManager::addDefaultExtension(std::string& path, const std::string& ext) {
+    std::string currentExt = getFileExtension(path);
+    if (currentExt.empty()) {
+        path += "." + ext;
+    }
+    return true;
+}
+
+void UIManager::handleNewFile() {
+    if (canvas) {
+        canvas->clear();
+
+        brushSize = 20.0f;
+        brushOpacity = 1.0f;
+        brushColor[0] = brushColor[1] = brushColor[2] = 0.0f;
+    }
 }

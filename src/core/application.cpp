@@ -20,9 +20,15 @@ void generateBrushTextures() {
     //                roughData.data(), size * 4);
 }
 
-Application::Application() : shouldClose(false) {}
+Application::Application() : shouldClose(false) {
+    // Initialize NFD
+    if(NFD::Init() != NFD_OKAY) {
+        std::cerr << "Failed to initialize NFD" << std::endl;
+    }
+}
 
 Application::~Application() {
+    NFD::Quit();
     glfwTerminate();
 }
 
@@ -105,8 +111,12 @@ bool Application::init() {
                         if (mods & GLFW_MOD_SHIFT) {
                             app->uiManager->showSaveDialog();  // Ctrl+Shift+S
                         } else {
-                            app->uiManager->handleSaveFile(false);  // Ctrl+S
+                            app->uiManager->showSaveDialog();  // Ctrl+S
                         }
+                        break;
+
+                    case GLFW_KEY_E:  // Ctrl+E
+                        app->uiManager->handleExportImage("png");
                         break;
                         
                     case GLFW_KEY_Z:  // Ctrl+Z

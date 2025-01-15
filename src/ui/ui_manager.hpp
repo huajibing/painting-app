@@ -2,6 +2,7 @@
 #include <imgui.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <nfd.hpp>
 #include "../brush/brush_system.hpp"
 #include "../core/canvas.hpp"
 #include "../file/file_system.hpp"
@@ -29,6 +30,7 @@
 #define ICON_FA_TRASH "\xef\x87\xb8"          // f2ed
 #define ICON_FA_ARROW_POINTER "\xef\x89\x85"  // f245
 #define ICON_FA_GRIP_LINES "\xef\x9e\xa4"     // f7a4
+#define ICON_FA_FILE_EXPORT "\xef\x95\xae"    // f56e
 
 class UIManager {
 public:
@@ -64,13 +66,10 @@ public:
         return true;
     }
 
-    void showOpenDialog() { showOpenFileDialog = true; }
-    void showSaveDialog() { showSaveFileDialog = true; }
-    void handleFileDialogs();
-    void handleNewFile();
-    void handleOpenFile();
-    void handleSaveFile(bool saveAs = false);
+    void showOpenDialog();
+    void showSaveDialog();
     void handleExportImage(const std::string& format);
+    void handleNewFile();
 
     void renderMainMenuBar(float height);
     void renderLeftToolbar(float width, float yOffset, float height);
@@ -81,6 +80,10 @@ public:
 private:
     void cleanup();
     void setupStyle();
+
+    void showExportDialog(const std::string& defaultFormat);
+    static std::string getFileExtension(const std::string& path);
+    static bool addDefaultExtension(std::string& path, const std::string& ext);
     
     GLFWwindow* window;
     BrushSystem* brushSystem;
@@ -101,11 +104,6 @@ private:
     // Cache last frame state
     ImVec2 lastWindowSize;
     bool lastFrameValid = false;
-
-    char openFilePath[512] = "";
-    char saveFilePath[512] = "";
-    bool showOpenFileDialog = false;
-    bool showSaveFileDialog = false;
 
     // Fonts
     ImFont* regularFont;

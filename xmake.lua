@@ -3,9 +3,10 @@ add_rules("mode.debug", "mode.release")
 -- Add packages before target
 add_requires("glfw")
 add_requires("glad")
-add_requires("imgui", {configs = {glfw = true}})
+add_requires("imgui", {configs = {glfw = true, opengl3 = true}})
 add_requires("stb")
 add_requires("glm")
+add_requires("nativefiledialog-extended")
 
 target("PaintingApp")
     set_kind("binary")
@@ -21,7 +22,7 @@ target("PaintingApp")
     add_includedirs("src/3rdparty")
     
     -- Add dependencies with their include paths
-    add_packages("glfw", "glad", "imgui", "stb", "glm")
+    add_packages("glfw", "glad", "imgui", "stb", "glm", "nativefiledialog-extended")
     
     -- Set platform-specific options
     if is_plat("windows") then
@@ -35,3 +36,8 @@ target("PaintingApp")
         add_links("pthread")
         add_links("dl")
     end
+
+    after_build(function (target)
+        os.mkdir(path.join(target:targetdir(), "assets"))
+        os.cp("assets/**", path.join(target:targetdir(), "assets"))
+    end)

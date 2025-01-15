@@ -43,7 +43,7 @@ void SelectionSystem::setupShaders() {
         out vec4 FragColor;
         
         void main() {
-            FragColor = vec4(0.2, 0.6, 1.0, 1.0); // 使用完全不透明的蓝色便于调试
+            FragColor = vec4(0.2, 0.6, 1.0, 1.0);
         }
     )";
     
@@ -126,10 +126,6 @@ void SelectionSystem::endSelection() {
     
     // Capture the selection content
     Layer* activeLayer = canvas.getLayer(canvas.getActiveLayerIndex());
-    std::cout << "Selection rect: x=" << selectionRect.x 
-          << ", y=" << selectionRect.y 
-          << ", w=" << selectionRect.width 
-          << ", h=" << selectionRect.height << std::endl;
     if (activeLayer && selectionRect.width > 0 && selectionRect.height > 0) {
         selectionContent = activeLayer->getPixels(selectionRect);
         selectionMode = SelectionMode::Moving;
