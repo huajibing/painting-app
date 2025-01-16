@@ -31,6 +31,11 @@
 #define ICON_FA_ARROW_POINTER "\xef\x89\x85"  // f245
 #define ICON_FA_GRIP_LINES "\xef\x9e\xa4"     // f7a4
 #define ICON_FA_FILE_EXPORT "\xef\x95\xae"    // f56e
+#define ICON_FA_QUESTION_CIRCLE "\xef\x81\x99" // f059
+#define ICON_FA_BOOK "\xef\x80\xad"           // f02d
+#define ICON_FA_KEYBOARD "\xef\x84\x9c"        // f11c
+#define ICON_FA_TOOLBOX "\xef\x95\x92"        // f552
+#define ICON_FA_XMARK "\xef\x80\x8d"          // f00d
 
 class UIManager {
 public:
@@ -112,4 +117,9 @@ private:
     ImFont* largeBoldFont;
     ImFont* iconFont;
     ImFont* largeIconFont;
+
+    void renderHelpPopup();
+    void renderCoordinateOverlay();
+    bool showHelpPopup = false;
+    ImVec2 currentMousePos{0, 0};
 };

@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 #include "../core/canvas.hpp"
 #include <unordered_map>
+#include "imgui_internal.h"
 
 class CursorManager {
 public:

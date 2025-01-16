@@ -88,6 +88,11 @@ void UIManager::render() {
                     width - leftToolbarWidth - rightPanelWidth, 
                     height - menuBarHeight);
     ImGui::PopStyleVar();
+
+    // Popup
+    if (showHelpPopup) {
+        renderHelpPopup();
+    }
     
     // Render ImGui
     ImGui::Render();
@@ -206,8 +211,6 @@ bool UIManager::shouldClose() const {
     return glfwWindowShouldClose(window);
 }
 
-
-
 void UIManager::renderMainMenuBar(float height) {
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, height));
@@ -288,6 +291,29 @@ void UIManager::renderMainMenuBar(float height) {
 
         ImGui::PopStyleVar();
     }
+
+    float windowWidth = ImGui::GetIO().DisplaySize.x;
+    
+    // Help button position
+    ImVec2 buttonPos(windowWidth - 50, 10);
+    ImGui::SetCursorPos(ImVec2(buttonPos.x - ImGui::GetStyle().WindowPadding.x, buttonPos.y));
+    
+    ImVec2 buttonSize(50.0f, 50.0f);
+    if (ImGui::Button(ICON_FA_QUESTION_CIRCLE "##Help", buttonSize)) {
+        showHelpPopup = true;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        ImGui::SetTooltip("Show Help");
+    }
+    
+    // // Popup
+    // if (showHelpPopup) {
+    //     renderHelpPopup();
+    // }
+
+    // Coordinate overlay
+    renderCoordinateOverlay();
     ImGui::End();
     
     ImGui::PopStyleVar(2);
@@ -624,6 +650,8 @@ void UIManager::renderLayersList() {
 }
 
 void UIManager::renderCanvasArea(float x, float y, float width, float height) {
+    bool modalIsOpen = (ImGui::GetTopMostPopupModal() != nullptr);
+
     ImGui::SetNextWindowPos(ImVec2(x, y));
     ImGui::SetNextWindowSize(ImVec2(width, height));
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.22f, 0.25f, 0.32f, 1.0f));
@@ -691,12 +719,168 @@ void UIManager::renderCanvasArea(float x, float y, float width, float height) {
     bool isOverCanvas = (mousePos.x >= finalPos.x && mousePos.x < finalPos.x + displaySize.x &&
                         mousePos.y >= finalPos.y && mousePos.y < finalPos.y + displaySize.y);
     
-    if (cursorManager && canvas) {
+    if (cursorManager && canvas && !modalIsOpen) {
         cursorManager->updateCursor(canvas->getTool(), isOverCanvas);
     }
 
     ImGui::End();
     ImGui::PopStyleColor();
+}
+
+void UIManager::renderHelpPopup() {
+    ImGui::SetNextWindowSize(ImVec2(860, 600));
+    
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    
+    const ImVec4 titleColor(0.32f, 0.67f, 0.98f, 1.0f);
+    const ImVec4 subtitleColor(0.9f, 0.9f, 0.9f, 1.0f);
+    const ImVec4 textColor(0.8f, 0.8f, 0.8f, 1.0f);
+    
+    if (showHelpPopup) {
+        ImGui::OpenPopup("Quick Help Guide");
+    }
+    
+    // Style
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(30, 30));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 15));
+    
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | 
+                            ImGuiWindowFlags_NoMove | 
+                            ImGuiWindowFlags_NoTitleBar;
+                            
+    if (ImGui::BeginPopupModal("Quick Help Guide", &showHelpPopup, flags)) {
+        // Title and close button
+        ImGui::BeginGroup();
+        ImGui::PushFont(largeBoldFont);
+        ImGui::TextColored(titleColor, ICON_FA_BOOK "  Help Guide");
+        ImGui::PopFont();
+        
+        // Close button
+        ImGui::SameLine(ImGui::GetWindowWidth() - 100);
+        if (ImGui::Button(ICON_FA_XMARK "##close", ImVec2(40, 40))) {
+            showHelpPopup = false;
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        }
+        ImGui::EndGroup();
+        
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // Calculate layout positions
+        float windowWidth = ImGui::GetWindowWidth();
+        float columnWidth = (windowWidth - 75) * 0.5f; // 75 for padding
+        float startX = ImGui::GetCursorPosX();
+        float startY = ImGui::GetCursorPosY();
+        float rightColumnX = startX + columnWidth + 15; // 15 for spacing between columns
+
+        // Left column title
+        ImGui::PushFont(boldFont);
+        ImGui::TextColored(subtitleColor, ICON_FA_KEYBOARD "  Keyboard Shortcuts");
+        ImGui::PopFont();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Right column title
+        float currentY = ImGui::GetCursorPosY();
+        ImGui::SetCursorPos(ImVec2(rightColumnX, startY));
+        ImGui::PushFont(boldFont);
+        ImGui::TextColored(subtitleColor, ICON_FA_TOOLBOX "  Tools");
+        ImGui::PopFont();
+        ImGui::Spacing();
+
+        ImGui::SetCursorPos(ImVec2(startX, currentY + ImGui::GetStyle().ItemSpacing.y * 2));
+        
+        // File Operations
+        ImGui::BeginGroup();
+        ImGui::PushStyleColor(ImGuiCol_Text, textColor);
+        ImGui::TextColored(titleColor, "File Operations");
+        ImGui::Spacing();
+        ImGui::Indent(20);
+        ImGui::BulletText("Ctrl + N: New File (Clear All)");
+        ImGui::BulletText("Ctrl + O: Open File");
+        ImGui::BulletText("Ctrl (+ Shift) + S: Save");
+        ImGui::BulletText("Ctrl + E: Export");
+        ImGui::Unindent(20);
+        
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::TextColored(titleColor, "Edit Operations");
+        ImGui::Spacing();
+        ImGui::Indent(20);
+        ImGui::BulletText("Ctrl + Z: Undo");
+        ImGui::BulletText("Ctrl + Y / Ctrl + Shift + Z: Redo");
+        ImGui::BulletText("Ctrl + C: Copy Selection");
+        ImGui::BulletText("Ctrl + X: Cut Selection");
+        ImGui::BulletText("Ctrl + V: Paste Selection");
+        ImGui::BulletText("Delete: Delete Selection");
+        ImGui::Unindent(20);
+        ImGui::PopStyleColor();
+        ImGui::EndGroup();
+
+        float leftHeight = ImGui::GetItemRectSize().y;
+
+        ImGui::SetCursorPos(ImVec2(rightColumnX, currentY + ImGui::GetStyle().ItemSpacing.y * 2));
+        
+        // Right column content
+        ImGui::BeginGroup();
+        ImGui::PushStyleColor(ImGuiCol_Text, textColor);
+        ImGui::SetNextItemWidth(columnWidth);
+
+        ImGui::TextColored(titleColor, "Drawing Tools");
+        ImGui::Spacing();
+        ImGui::Indent(20);
+        ImGui::BulletText(ICON_FA_PENCIL "  Brush: Free-form drawing");
+        ImGui::BulletText(ICON_FA_ERASER "  Eraser: Erase parts of image");
+        ImGui::Unindent(20);
+        
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::TextColored(titleColor, "Selection Tools");
+        ImGui::Spacing();
+        ImGui::Indent(20);
+        ImGui::BulletText(ICON_FA_CROP "  Selector: Select & manipulate");
+        ImGui::BulletText(ICON_FA_ARROW_POINTER "  Pointer: Basic cursor tool");
+        ImGui::Unindent(20);
+        
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::TextColored(titleColor, "Layer Operations");
+        ImGui::Spacing();
+        ImGui::Indent(20);
+        ImGui::BulletText(ICON_FA_LAYER_GROUP "  Layer panel: Manage layers");
+        ImGui::BulletText(ICON_FA_EYE "  Toggle visibility of layers");
+        ImGui::Unindent(20);
+        
+        ImGui::PopStyleColor();
+        ImGui::EndGroup();
+
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(3);
+}
+
+
+void UIManager::renderCoordinateOverlay() {
+    if (!canvas) return;
+
+    ImVec2 mousePos = ImGui::GetMousePos();
+    float canvasX, canvasY;
+    
+    if (windowToCanvas(mousePos.x, mousePos.y, canvasX, canvasY)) {
+        float windowWidth = ImGui::GetIO().DisplaySize.x;
+        ImVec2 textPos(windowWidth - 250, 20);
+        
+        char coordText[64];
+        snprintf(coordText, sizeof(coordText), "X: %.0f  Y: %.0f", canvasX, canvasY);
+        
+        ImGui::SetCursorPos(ImVec2(textPos.x - ImGui::GetStyle().WindowPadding.x, textPos.y));
+        ImGui::TextUnformatted(coordText);
+    }
 }
 
 void UIManager::showOpenDialog() {
