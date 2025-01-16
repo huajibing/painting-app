@@ -6,15 +6,63 @@
 #include <vector>
 #include "base_brush.hpp"
 #include "texture_brush.hpp"
-// #include "chinese_brush.hpp"
+#include "watercolor_brush.hpp"
+#include "oil_paint_brush.hpp"
+#include "crayon_brush.hpp"
+#include "calligraphy_brush.hpp"
 
 enum class BrushType {
     BaseCircle,
     BaseSquare,
     TexturePencil,
-    TextureAcrylic
-    // ChineseBrush
+    TextureAcrylic,
+    SoftCircle,
+    Watercolor,
+    Rough,
+    OilPaint,
+    Crayon,
+    // Calligraphy
 };
+
+static const std::vector<BrushType> brushTypes = {
+    BrushType::BaseCircle,
+    BrushType::BaseSquare,
+    BrushType::TexturePencil,
+    BrushType::TextureAcrylic,
+    BrushType::SoftCircle,
+    BrushType::Watercolor,
+    BrushType::Rough,
+    BrushType::OilPaint,
+    BrushType::Crayon,
+    // BrushType::Calligraphy
+};
+
+static std::string getBrushNameByType(BrushType type) {
+    switch(type) {
+        case BrushType::BaseCircle:
+            return "Circle";
+        case BrushType::BaseSquare:
+            return "Square";
+        case BrushType::TexturePencil:
+            return "Pencil";
+        case BrushType::TextureAcrylic:
+            return "Acrylic";
+        case BrushType::SoftCircle:
+            return "Soft Circle";
+        case BrushType::Watercolor:
+            return "Watercolor";
+        case BrushType::Rough:
+            return "Rough";
+        case BrushType::OilPaint:
+            return "Oil Paint";
+        case BrushType::Crayon:
+            return "Crayon";
+        // case BrushType::Calligraphy:
+        //     return "Calligraphy";
+        default:
+            return "Unknown";
+    }
+}
 
 class BrushFactory {
 public:
@@ -34,8 +82,18 @@ public:
                 return std::make_shared<TextureBrush::PencilBrush>(framebuffer, texture, width, height);
             case BrushType::TextureAcrylic:
                 return std::make_shared<TextureBrush::AcrylicBrush>(framebuffer, texture, width, height);
-            // case BrushType::ChineseBrush:
-            //     return std::make_shared<ChineseBrush::ChineseBrushImpl>(framebuffer, texture, width, height);
+            case BrushType::SoftCircle:
+                return std::make_shared<TextureBrush::SoftCircleBrush>(framebuffer, texture, width, height);
+            case BrushType::Watercolor:
+                return std::make_shared<WatercolorBrush::WatercolorBrush>(framebuffer, texture, width, height);
+            case BrushType::Rough:
+                return std::make_shared<OilPaintBrush::RoughBrush>(framebuffer, texture, width, height);
+            case BrushType::OilPaint:
+                return std::make_shared<OilPaintBrush::OilPaintBrush>(framebuffer, texture, width, height);
+            case BrushType::Crayon:
+                return std::make_shared<CrayonBrush::CrayonBrush>(framebuffer, texture, width, height);
+            // case BrushType::Calligraphy:
+            //     return std::make_shared<CalligraphyBrush::CalligraphyBrush>(framebuffer, texture, width, height);
             default:
                 return std::make_shared<BaseBrush::CircleBrush>(framebuffer, width, height);
         }

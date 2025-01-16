@@ -24,7 +24,7 @@ bool UIManager::init() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     
-    window = glfwCreateWindow(1660, 1000, "Painting App", nullptr, nullptr);
+    window = glfwCreateWindow(1680, 1000, "Painting App", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         return false;
@@ -177,6 +177,12 @@ void UIManager::setupStyle() {
     
     // Separator
     colors[ImGuiCol_Separator] = ImVec4(0.274f, 0.341f, 0.455f, 1.00f);
+
+    // Scrollbar
+    colors[ImGuiCol_ScrollbarBg] = ImVec4(0.223f, 0.255f, 0.318f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.274f, 0.341f, 0.455f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.374f, 0.441f, 0.555f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.32f, 0.67f, 0.98f, 1.0f);
     
     // Style
     style.WindowPadding = ImVec2(15, 15);
@@ -197,6 +203,10 @@ void UIManager::setupStyle() {
     style.PopupBorderSize = 1.0f;
     style.FrameBorderSize = 0.0f;
     style.TabBorderSize = 0.0f;
+    
+    // Scrollbar settings
+    style.ScrollbarSize = 16.0f;
+    style.ScrollbarRounding = 12.0f;
 }
 
 void UIManager::setBrushSystem(BrushSystem* bs) {
@@ -306,11 +316,12 @@ void UIManager::renderMainMenuBar(float height) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         ImGui::SetTooltip("Show Help");
     }
-    
-    // // Popup
-    // if (showHelpPopup) {
-    //     renderHelpPopup();
-    // }
+
+    // Gamepad text
+    ImGui::SetCursorPos(ImVec2(windowWidth - 800, 20));
+    if (hasGamepadCursor) {
+        ImGui::Text(ICON_FA_GAMEPAD "  Gamepad connected: %s", gamepadName.c_str());
+    }
 
     // Coordinate overlay
     renderCoordinateOverlay();
@@ -359,6 +370,7 @@ void UIManager::renderLeftToolbar(float width, float yOffset, float height) {
         }
         if (ImGui::Button(ICON_FA_ERASER, ImVec2(buttonSize, buttonSize))) {
             canvas->setTool(Tool::Eraser);
+            brushSystem->setBrushType(BrushType::BaseCircle);
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
@@ -415,33 +427,17 @@ void UIManager::renderRightPanel(float x, float y, float width, float height) {
         ImGuiWindowFlags_NoMove)) {
         
         // Brush Type Section
-        std::string brushTypeLabel = "Brush Type";
-        if (brushSystem->getBrushType() == BrushType::TextureAcrylic) {
-            brushTypeLabel = "Acrylic";
-        } else if (brushSystem->getBrushType() == BrushType::TexturePencil) {
-            brushTypeLabel = "Pencil";
-        } else if (brushSystem->getBrushType() == BrushType::BaseCircle) {
-            brushTypeLabel = "Circle";
-        } else if (brushSystem->getBrushType() == BrushType::BaseSquare) {
-            brushTypeLabel = "Square";
-        }
+        std::string brushTypeLabel = getBrushNameByType(brushSystem->getBrushType());
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 8));
         ImGui::PushFont(largeBoldFont);
         ImGui::TextUnformatted(ICON_FA_BRUSH "  Brush Type");
         ImGui::PopFont();
         ImGui::SetNextItemWidth(-1);
         if (ImGui::BeginCombo("##BrushType", brushTypeLabel.c_str(), ImGuiComboFlags_NoArrowButton)) {
-            if (ImGui::Selectable("Acrylic", brushSystem->getBrushType() == BrushType::TextureAcrylic)) {
-                brushSystem->setBrushType(BrushType::TextureAcrylic);
-            }
-            if (ImGui::Selectable("Pencil", brushSystem->getBrushType() == BrushType::TexturePencil)) {
-                brushSystem->setBrushType(BrushType::TexturePencil);
-            }
-            if (ImGui::Selectable("Circle", brushSystem->getBrushType() == BrushType::BaseCircle)) {
-                brushSystem->setBrushType(BrushType::BaseCircle);
-            }
-            if (ImGui::Selectable("Square", brushSystem->getBrushType() == BrushType::BaseSquare)) {
-                brushSystem->setBrushType(BrushType::BaseSquare);
+            for (auto& brushType : brushTypes) {
+                if (ImGui::Selectable(getBrushNameByType(brushType).c_str(), brushSystem->getBrushType() == brushType)) {
+                    brushSystem->setBrushType(brushType);
+                }
             }
             ImGui::EndCombo();
         }
@@ -484,7 +480,7 @@ void UIManager::renderRightPanel(float x, float y, float width, float height) {
         ImGui::Spacing();
 
         // Update brush settings if any value changed
-        if (colorChanged || sizeChanged || opacityChanged) {
+        if (colorChanged || sizeChanged || opacityChanged || hasGamepadCursor) {
             if (brushSystem) {
                 Color color(brushColor[0], brushColor[1], brushColor[2], brushOpacity);
                 brushSystem->updateBrushSettings(brushSize, color);
@@ -723,15 +719,19 @@ void UIManager::renderCanvasArea(float x, float y, float width, float height) {
         cursorManager->updateCursor(canvas->getTool(), isOverCanvas);
     }
 
+    if (hasGamepadCursor) {
+        renderGamepadCursor();
+    }
+
     ImGui::End();
     ImGui::PopStyleColor();
 }
 
 void UIManager::renderHelpPopup() {
-    ImGui::SetNextWindowSize(ImVec2(860, 600));
+    ImGui::SetNextWindowSize(ImVec2(1060, 600));
     
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     
     const ImVec4 titleColor(0.32f, 0.67f, 0.98f, 1.0f);
     const ImVec4 subtitleColor(0.9f, 0.9f, 0.9f, 1.0f);
@@ -743,7 +743,7 @@ void UIManager::renderHelpPopup() {
     
     // Style
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(30, 30));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 24.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 15));
     
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | 
@@ -855,8 +855,24 @@ void UIManager::renderHelpPopup() {
         ImGui::BulletText(ICON_FA_LAYER_GROUP "  Layer panel: Manage layers");
         ImGui::BulletText(ICON_FA_EYE "  Toggle visibility of layers");
         ImGui::Unindent(20);
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::TextColored(titleColor, "Gamepad Controls");
+        ImGui::Spacing();
+        ImGui::Indent(20);
+        ImGui::BulletText("Left Stick: Move cursor");
+        ImGui::BulletText("Right Bumper (RB/R1): Draw");
+        ImGui::BulletText("Right Trigger (RT/R2): Accelerate cursor");
+        ImGui::BulletText("Left Trigger (LT/L2): Adjust brush size");
+        ImGui::BulletText("D-Pad Up: Select Brush tool");
+        ImGui::BulletText("D-Pad Right: Select Eraser tool");
+        ImGui::BulletText("D-Pad Down: Select Selection tool");
+        ImGui::BulletText("Y Button: Undo");
+        ImGui::BulletText("X Button: Redo");
+        ImGui::Unindent(20);
         
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(2);
         ImGui::EndGroup();
 
         ImGui::EndPopup();
@@ -987,4 +1003,60 @@ void UIManager::handleNewFile() {
         brushOpacity = 1.0f;
         brushColor[0] = brushColor[1] = brushColor[2] = 0.0f;
     }
+}
+
+void UIManager::updateGamepadCursor(float x, float y) {
+    hasGamepadCursor = true;
+    gamepadCursorX = x;
+    gamepadCursorY = y;
+}
+
+void UIManager::renderGamepadCursor() {
+    if (!hasGamepadCursor || !canvas) return;
+
+    // Convert canvas coordinates to screen coordinates
+    float canvasX = gamepadCursorX;
+    float canvasY = gamepadCursorY;
+    
+    // Convert canvas coordinates to screen coordinates
+    float screenX = canvasDisplayPos.x + (canvasX / canvas->getWidth()) * canvasDisplaySize.x;
+    float screenY = canvasDisplayPos.y + (canvasY / canvas->getHeight()) * canvasDisplaySize.y;
+
+    // Get the window draw list
+    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    
+    // Cursor style
+    const float cursorSize = 20.0f;
+    const ImU32 cursorColor = IM_COL32(53, 81, 210, 255);
+    const ImU32 cursorOutlineColor = IM_COL32(255, 255, 255, 255);
+    const float outlineThickness = 3.0f;
+
+    // Draw cursor (crosshair style)
+    // Outline
+    drawList->AddLine(
+        ImVec2(screenX - cursorSize, screenY),
+        ImVec2(screenX + cursorSize, screenY),
+        cursorOutlineColor,
+        outlineThickness
+    );
+    drawList->AddLine(
+        ImVec2(screenX, screenY - cursorSize),
+        ImVec2(screenX, screenY + cursorSize),
+        cursorOutlineColor,
+        outlineThickness
+    );
+
+    // Inner lines
+    drawList->AddLine(
+        ImVec2(screenX - cursorSize + 2, screenY),
+        ImVec2(screenX + cursorSize - 2, screenY),
+        cursorColor,
+        2.0f
+    );
+    drawList->AddLine(
+        ImVec2(screenX, screenY - cursorSize + 2),
+        ImVec2(screenX, screenY + cursorSize - 2),
+        cursorColor,
+        2.0f
+    );
 }

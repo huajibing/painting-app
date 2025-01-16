@@ -137,7 +137,7 @@ namespace TextureBrush {
         brushShader->setVec2("position", glm::vec2(clipX, clipY));
         brushShader->setFloat("rotation", rotation);
         brushShader->setFloat("size", (size / height) * 2.0f);
-        brushShader->setVec4("brushColor", glm::vec4(color.r, color.g, color.b, color.a));
+        brushShader->setVec4("brushColor", glm::vec4(color.r, color.g, color.b, color.a * opacityScale));
 
         // Disable blend
         glDisable(GL_BLEND);

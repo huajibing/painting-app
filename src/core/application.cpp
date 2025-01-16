@@ -11,13 +11,13 @@ void generateBrushTextures() {
     BrushTextureGenerator generator;
     
     int size = 512;
-    auto scatterData = generator.generateScatterBrush(size, 600);
-    // stbi_write_png("assets/brushes/scatter_brush.png", size, size, 4, 
-    //                scatterData.data(), size * 4);
-
-    auto roughData = generator.generateRoughBrush(size, 0.1f, 30.0f, 24);
-    // stbi_write_png("assets/brushes/rough_brush.png", size, size, 4, 
-    //                roughData.data(), size * 4);
+    auto oilData = generator.generateOilBrush(size, 120, 0.08f);
+    auto crayonData = generator.generateCrayonBrush(size, 0.6f);
+    // stbi_write_png("assets/brushes/crayon_brush.png", size, size, 4, 
+    //                crayonData.data(), size * 4);
+    
+    // stbi_write_png("assets/brushes/oil_brush.png", size, size, 4, 
+    //                oilData.data(), size * 4);
 }
 
 Application::Application() : shouldClose(false) {
@@ -33,6 +33,8 @@ Application::~Application() {
 }
 
 bool Application::init() {
+    // generateBrushTextures();
+
     // Initialize GLFW
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
@@ -188,6 +190,10 @@ bool Application::init() {
     glViewport(0, 0, width, height);
     canvas->resize(width, height);
 
+    // Initialize gamepad system
+    gamepadSystem = std::make_unique<GamepadSystem>(*canvas, *brushSystem, *uiManager);
+    gamepadSystem->init();
+
     return true;
 }
 
@@ -196,6 +202,11 @@ void Application::run() {
         // Poll and handle events
         glfwPollEvents();
         handleEvents();
+
+        // Update gamepad
+        if (gamepadSystem) {
+            gamepadSystem->update();
+        }
 
         // Get window size
         int display_w, display_h;

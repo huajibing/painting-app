@@ -82,8 +82,218 @@ public:
         return data;
     }
 
+    std::vector<unsigned char> generateCrayonBrush(int size, float roughness = 0.6f) {
+        std::vector<unsigned char> data(size * size * 4, 0);
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        
+        // Generate base texture
+        for(int y = 0; y < size; y++) {
+            for(int x = 0; x < size; x++) {
+                float dx = x - size/2;
+                float dy = y - size/2;
+                float dist = std::sqrt(dx*dx + dy*dy) / (size/2.0f);
+                
+                if(dist <= 1.0f) {
+                    // Generate irregular edges
+                    float angle = std::atan2(dy, dx);
+                    float noise = perlinNoise(x * 0.1f, y * 0.1f);
+                    float edgeNoise = perlinNoise(std::cos(angle) * 10.0f, 
+                                                std::sin(angle) * 10.0f);
+                    
+                    // Calculate intensity with rough texture
+                    float intensity = (1.0f - dist * dist) * (1.0f + noise * roughness);
+                    intensity *= (1.0f + edgeNoise * roughness);
+                    
+                    // Add grain texture
+                    float grain = perlinNoise(x * 0.2f, y * 0.2f);
+                    intensity *= (1.0f + grain * roughness);
+                    
+                    // Apply edge falloff
+                    float edgeFalloff = std::pow(1.0f - dist, 0.5f);
+                    intensity *= edgeFalloff;
+                    
+                    // Set pixel values
+                    int idx = (y * size + x) * 4;
+                    data[idx + 0] = 255;  // R
+                    data[idx + 1] = 255;  // G
+                    data[idx + 2] = 255;  // B
+                    data[idx + 3] = static_cast<unsigned char>(
+                        std::clamp(intensity * 255.0f, 0.0f, 255.0f));
+                }
+            }
+        }
+        
+        // Add detailed grain
+        addGrainTexture(data, size, 0.3f, gen);
+        
+        return data;
+    }
+
+    void addGrainTexture(std::vector<unsigned char>& data, int size, 
+                        float intensity, std::mt19937& gen) {
+        std::uniform_real_distribution<float> dist(-intensity, intensity);
+        
+        for(int y = 0; y < size; y++) {
+            for(int x = 0; x < size; x++) {
+                int idx = (y * size + x) * 4;
+                if(data[idx + 3] > 0) {
+                    float noise = dist(gen);
+                    data[idx + 3] = static_cast<unsigned char>(
+                        std::clamp(
+                            static_cast<float>(data[idx + 3]) * (1.0f + noise),
+                            0.0f, 255.0f
+                        )
+                    );
+                }
+            }
+        }
+    }
+
+    std::vector<unsigned char> generateOilBrush(int size, float bristleCount = 32, float bristleWidth = 0.1f) {
+        std::vector<unsigned char> data(size * size * 4, 0);
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> distAngle(0.0f, 2.0f * PI);
+        std::normal_distribution<float> distLength(0.8f, 0.08f);
+        std::uniform_real_distribution<float> distOffset(-0.1f, 0.1f);
+        
+        // Generate bristle strokes
+        for (int i = 0; i < bristleCount; ++i) {
+            float angle = distAngle(gen);
+            float length = std::max(0.2f, std::min(1.0f, distLength(gen)));
+            float offset = distOffset(gen);
+            
+            // Calculate bristle path
+            float startX = size/2 + std::cos(angle) * size/4 * offset;
+            float startY = size/2 + std::sin(angle) * size/4 * offset;
+            float endX = startX + std::cos(angle) * size/2 * length;
+            float endY = startY + std::sin(angle) * size/2 * length;
+            
+            // Draw bristle stroke
+            drawBristleStroke(data, size, 
+                            startX, startY, 
+                            endX, endY, 
+                            bristleWidth * size, 
+                            gen);
+        }
+        
+        // Add texture variation
+        addTextureNoise(data, size, gen);
+        
+        // Smooth the texture
+        smoothTexture(data, size);
+        
+        return data;
+    }
+
     
 private:
+    void drawBristleStroke(std::vector<unsigned char>& data, int size,
+                          float x1, float y1, float x2, float y2,
+                          float width, std::mt19937& gen) {
+        std::normal_distribution<float> widthVar(1.0f, 0.2f);
+        
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float length = std::sqrt(dx*dx + dy*dy);
+        
+        // Draw multiple points along the stroke
+        int steps = static_cast<int>(length);
+        for (int i = 0; i < steps; ++i) {
+            float t = float(i) / (steps - 1);
+            float x = x1 + dx * t;
+            float y = y1 + dy * t;
+            
+            // Vary the width along the stroke
+            float currentWidth = width * widthVar(gen) * (1.0f - t * 0.3f);
+            
+            drawBristlePoint(data, size, x, y, currentWidth);
+        }
+    }
+    
+    void drawBristlePoint(std::vector<unsigned char>& data, int size,
+                         float x, float y, float width) {
+        int radius = static_cast<int>(width / 2);
+        
+        for(int dy = -radius; dy <= radius; dy++) {
+            for(int dx = -radius; dx <= radius; dx++) {
+                int px = static_cast<int>(x + dx);
+                int py = static_cast<int>(y + dy);
+                
+                if(px >= 0 && px < size && py >= 0 && py < size) {
+                    float dist = std::sqrt(dx*dx + dy*dy);
+                    if(dist <= radius) {
+                        float intensity = std::exp(-dist*dist/(width*width)) * 255;
+                        
+                        int idx = (py * size + px) * 4;
+                        data[idx + 0] = 255;
+                        data[idx + 1] = 255;
+                        data[idx + 2] = 255;
+                        data[idx + 3] = std::max(data[idx + 3], 
+                                               static_cast<unsigned char>(intensity));
+                    }
+                }
+            }
+        }
+    }
+    
+    void addTextureNoise(std::vector<unsigned char>& data, int size, 
+                        std::mt19937& gen) {
+        std::normal_distribution<float> noise(0.0f, 20.0f);
+        
+        for(int y = 0; y < size; y++) {
+            for(int x = 0; x < size; x++) {
+                int idx = (y * size + x) * 4;
+                if(data[idx + 3] > 0) {
+                    int noiseVal = static_cast<int>(noise(gen));
+                    data[idx + 3] = std::clamp(
+                        static_cast<int>(data[idx + 3]) + noiseVal, 
+                        0, 255
+                    );
+                }
+            }
+        }
+    }
+    
+    void smoothTexture(std::vector<unsigned char>& data, int size) {
+        std::vector<unsigned char> temp(data.size());
+        
+        int kernel_size = 3;
+        float kernel_sigma = 1.0f;
+        
+        for(int y = 0; y < size; y++) {
+            for(int x = 0; x < size; x++) {
+                float sum = 0.0f;
+                float weightSum = 0.0f;
+                
+                for(int ky = -kernel_size; ky <= kernel_size; ky++) {
+                    for(int kx = -kernel_size; kx <= kernel_size; kx++) {
+                        int sx = x + kx;
+                        int sy = y + ky;
+                        
+                        if(sx >= 0 && sx < size && sy >= 0 && sy < size) {
+                            float weight = std::exp(-(kx*kx + ky*ky)/(2*kernel_sigma*kernel_sigma));
+                            int idx = (sy * size + sx) * 4;
+                            sum += data[idx + 3] * weight;
+                            weightSum += weight;
+                        }
+                    }
+                }
+                
+                int idx = (y * size + x) * 4;
+                temp[idx + 0] = 255;
+                temp[idx + 1] = 255;
+                temp[idx + 2] = 255;
+                temp[idx + 3] = static_cast<unsigned char>(sum / weightSum);
+            }
+        }
+        
+        data = std::move(temp);
+    }
+
     void drawGaussianPointRGBA(std::vector<unsigned char>& data, int size, 
                               int centerX, int centerY, float pointSize) {
         int radius = static_cast<int>(pointSize * 2.5f);

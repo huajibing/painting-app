@@ -36,6 +36,7 @@
 #define ICON_FA_KEYBOARD "\xef\x84\x9c"        // f11c
 #define ICON_FA_TOOLBOX "\xef\x95\x92"        // f552
 #define ICON_FA_XMARK "\xef\x80\x8d"          // f00d
+#define ICON_FA_GAMEPAD "\xef\x84\x9b"        // f11b
 
 class UIManager {
 public:
@@ -71,6 +72,16 @@ public:
         return true;
     }
 
+    const float* getBrushColor() const { return brushColor; }
+    float getBrushSize() const { return brushSize; }
+    float getBrushOpacity() const { return brushOpacity; }
+    void updateBrushColor(float r, float g, float b) {
+        brushColor[0] = r;
+        brushColor[1] = g;
+        brushColor[2] = b;
+    }
+    void updateBrushSize(float size) { brushSize = size; }
+
     void showOpenDialog();
     void showSaveDialog();
     void handleExportImage(const std::string& format);
@@ -81,6 +92,10 @@ public:
     void renderRightPanel(float x, float y, float width, float height);
     void renderLayersList();
     void renderCanvasArea(float x, float y, float width, float height);
+
+    void enableGamepadCursor(bool enable) { hasGamepadCursor = enable; }
+    void updateGamepadCursor(float x, float y);
+    void setGamepadName(const std::string& name) { gamepadName = name; }
 
 private:
     void cleanup();
@@ -122,4 +137,14 @@ private:
     void renderCoordinateOverlay();
     bool showHelpPopup = false;
     ImVec2 currentMousePos{0, 0};
+
+    void renderGamepadCursor();
+    void setGamepadCursorPosition(float x, float y) { 
+        gamepadCursorX = x;
+        gamepadCursorY = y;
+    }
+    bool hasGamepadCursor = false;
+    float gamepadCursorX = 0.0f;
+    float gamepadCursorY = 0.0f;
+    std::string gamepadName = "";
 };

@@ -57,6 +57,7 @@ namespace TextureBrush{
         float spacing = 0.25f;
         float minDistance = 0.2f;
         float sizeScale = 1.0f;
+        float opacityScale = 1.0f;
         
         // Random number generation
         std::mt19937 rng;
@@ -190,6 +191,25 @@ namespace TextureBrush{
             setSizeJitter(0.1f);
             setSpacing(0.02f);
             minDistance = 0.0f;
+        }
+    };
+
+    class SoftCircleBrush : public TextureBrush {
+    public:
+        SoftCircleBrush(unsigned int framebuffer, unsigned int texture, int width, int height)
+            : TextureBrush(framebuffer, texture, width, height) {
+        }
+        
+        void init() override {
+            TextureBrush::init();
+            loadTexture("assets/brushes/circle_soft.png");
+            setRotationRange(0.0f, 360.0f);
+            setScatterRange(0.0f, 0.1f);
+            setRotationJitter(0.1f);
+            setSizeJitter(0.1f);
+            setSpacing(0.1f);
+            minDistance = 0.1f;
+            opacityScale = 0.3f;
         }
     };
 } // namespace TextureBrush
