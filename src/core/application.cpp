@@ -5,20 +5,6 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <iostream>
-#include "../brush/texture_generator.hpp"
-
-void generateBrushTextures() {
-    BrushTextureGenerator generator;
-    
-    int size = 512;
-    auto oilData = generator.generateOilBrush(size, 120, 0.08f);
-    auto crayonData = generator.generateCrayonBrush(size, 0.6f);
-    // stbi_write_png("assets/brushes/crayon_brush.png", size, size, 4, 
-    //                crayonData.data(), size * 4);
-    
-    // stbi_write_png("assets/brushes/oil_brush.png", size, size, 4, 
-    //                oilData.data(), size * 4);
-}
 
 Application::Application() : shouldClose(false) {
     // Initialize NFD
@@ -33,8 +19,6 @@ Application::~Application() {
 }
 
 bool Application::init() {
-    // generateBrushTextures();
-
     // Initialize GLFW
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
